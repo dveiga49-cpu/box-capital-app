@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 interface Props { user: { id: number; name: string; email: string; role: string }; }
 interface Client { id: number; name: string; email: string; phone: string | null; active: boolean; createdAt: string; }
 interface Asset { id: number; portfolioId: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
-interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; }
+interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; }
 interface PortfolioData { portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[]; }
 
@@ -560,6 +560,7 @@ function EditPortfolioModal({ portfolio, onClose, onSuccess }: { portfolio: Port
   const [initialValue, setInitialValue] = useState(String(portfolio.initialValue));
   const [goal, setGoal] = useState(String(portfolio.goal));
   const [note, setNote] = useState(portfolio.note ?? "");
+  const [projectionRate, setProjectionRate] = useState(String(portfolio.projectionRate ?? 1));
   const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -568,7 +569,7 @@ function EditPortfolioModal({ portfolio, onClose, onSuccess }: { portfolio: Port
     setLoading(true);
     const r = await fetch(`/api/portfolio/${portfolio.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initialValue: parseFloat(initialValue), goal: parseFloat(goal), note })
+      body: JSON.stringify({ initialValue: parseFloat(initialValue), goal: parseFloat(goal), note, projectionRate: parseFloat(projectionRate) || 1 })
     });
     const d = await r.json(); setLoading(false);
     if (!r.ok) { setErr(d.error || "Erro."); return; }
@@ -585,6 +586,13 @@ function EditPortfolioModal({ portfolio, onClose, onSuccess }: { portfolio: Port
           <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Ex: Gestão patrimonial Box Capital Strategy"
             rows={3}
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-yellow-600/50 resize-none transition-all" />
+        </div>
+        <div className="pt-2 border-t border-border">
+          <p className="text-[11px] text-muted-foreground mb-2 font-medium">Projeção 2026</p>
+          <Field label="Taxa de crescimento mensal (% ao mês)" value={projectionRate} onChange={setProjectionRate} placeholder="1" type="number" />
+          <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+            Equivale a ~{((Math.pow(1 + (parseFloat(projectionRate) || 1) / 100, 12) - 1) * 100).toFixed(1)}% ao ano. Cada cliente pode ter uma taxa diferente.
+          </p>
         </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60">
