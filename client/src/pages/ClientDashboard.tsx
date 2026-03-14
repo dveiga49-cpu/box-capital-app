@@ -8,7 +8,7 @@ import {
 
 interface Props { user: { id: number; name: string; email: string; role: string }; }
 interface Asset { id: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
-interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; updatedAt: string; }
+interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; updatedAt: string; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -156,6 +156,19 @@ export default function ClientDashboard({ user }: Props) {
 
   // Last year benchmark comparison
   const lastAnnual = annualData[annualData.length - 1];
+
+  // ── 2026 projection data ─────────────────────────────────
+  const projectionData = useMemo(() => {
+    const rate = (portfolio?.projectionRate ?? 1) / 100; // monthly rate as decimal
+    // Base: latest snapshot value, or total
+    const base = latestSnapshot?.value ?? total;
+    if (base <= 0) return [];
+    const months = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    return months.map((m, i) => ({
+      label: `${m}/26`,
+      projected: parseFloat((base * Math.pow(1 + rate, i + 1)).toFixed(2)),
+    }));
+  }, [portfolio?.projectionRate, latestSnapshot, total]);
 
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-background">
@@ -389,6 +402,86 @@ export default function ClientDashboard({ user }: Props) {
                 </div>
               )}
             </div>
+
+            {/* ── Projeção 2026 ── */}
+            {projectionData.length > 0 && (
+              <div
+                className="rounded-2xl p-5"
+                style={{ background: "#131620", border: "1px solid rgba(96,165,250,0.15)" }}
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><path d="M2 12h20M12 2l10 10-10 10"/></svg>
+                      Projeção 2026
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Taxa de {portfolio?.projectionRate ?? 1}% ao mês
+                      {" "}·{" "}
+                      <span className="text-blue-400 font-semibold">
+                        ~{((Math.pow(1 + (portfolio?.projectionRate ?? 1) / 100, 12) - 1) * 100).toFixed(1)}% ao ano
+                      </span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dez/26 projetado</p>
+                    <p className="text-base font-bold text-blue-400 tabular">
+                      {projectionData.length > 0 ? fmtBRL(projectionData[projectionData.length - 1].projected) : "—"}
+                    </p>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={projectionData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="projGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.2} />
+                        <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: "#6b7280", fontSize: 10 }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: "#6b7280", fontSize: 10 }}
+                      axisLine={false} tickLine={false}
+                      tickFormatter={v => "R$" + (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v)}
+                      width={52}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        return (
+                          <div className="bg-[#1a1c24] border border-[rgba(96,165,250,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs">
+                            <p className="text-blue-400 font-bold text-sm mb-1">{label}</p>
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="text-muted-foreground">Projetado</span>
+                              <span className="font-bold text-white tabular">{fmtBRL(payload[0]?.value ?? 0)}</span>
+                            </div>
+                          </div>
+                        );
+                      }}
+                      cursor={{ stroke: "rgba(96,165,250,0.3)", strokeWidth: 1 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="projected"
+                      stroke="#60a5fa"
+                      strokeWidth={2}
+                      strokeDasharray="6 3"
+                      fill="url(#projGrad)"
+                      dot={{ fill: "#60a5fa", r: 3, strokeWidth: 0 }}
+                      activeDot={{ r: 5, fill: "#60a5fa", stroke: "#0d0f14", strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+                <p className="text-[10px] text-muted-foreground/50 mt-3 text-center">
+                  Projeção baseada em crescimento composto de {portfolio?.projectionRate ?? 1}% a.m. — valores estimados, não garantidos.
+                </p>
+              </div>
+            )}
           </>
         )}
 
