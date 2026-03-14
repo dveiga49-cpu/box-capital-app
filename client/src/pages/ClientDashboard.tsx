@@ -135,7 +135,10 @@ export default function ClientDashboard({ user }: Props) {
   const portfolio = data?.portfolio;
   const snapshots = data?.snapshots ?? [];
 
-  const total = assets.reduce((s, a) => s + a.quantity * a.currentPrice, 0);
+  const assetsTotal = assets.reduce((s, a) => s + a.quantity * a.currentPrice, 0);
+  // Use latest snapshot value as total when no assets are tracked individually
+  const latestSnapshot = snapshots.length > 0 ? [...snapshots].sort((a, b) => b.month.localeCompare(a.month))[0] : null;
+  const total = assetsTotal > 0 ? assetsTotal : (latestSnapshot?.value ?? 0);
   const initialValue = portfolio?.initialValue ?? 0;
   const goal = portfolio?.goal ?? 500000;
   const gain = total - initialValue;
