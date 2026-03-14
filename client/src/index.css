@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 25% 7%;
+    --foreground: 40 10% 90%;
+    --card: 222 22% 10%;
+    --card-foreground: 40 10% 90%;
+    --popover: 222 22% 10%;
+    --popover-foreground: 40 10% 90%;
+    --primary: 43 60% 55%;
+    --primary-foreground: 222 25% 7%;
+    --secondary: 222 20% 15%;
+    --secondary-foreground: 40 10% 85%;
+    --muted: 222 20% 15%;
+    --muted-foreground: 40 5% 55%;
+    --accent: 222 20% 18%;
+    --accent-foreground: 43 60% 65%;
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 15% 18%;
+    --input: 222 20% 13%;
+    --ring: 43 60% 55%;
+    --radius: 0.625rem;
+    --gold: #C9A84C;
+    --gold-light: #e8c878;
+    --success: #3fcf8e;
+    --danger: #f06565;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.text-gold { color: var(--gold); }
+.text-gold-light { color: var(--gold-light); }
+.bg-gold { background-color: var(--gold); }
+.border-gold { border-color: var(--gold); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+
+.tabular { font-variant-numeric: tabular-nums lining-nums; }
+
+.btn-gold {
+  background: linear-gradient(135deg, #C9A84C 0%, #e8c878 50%, #C9A84C 100%);
+  background-size: 200% 100%;
+  color: #0d0f14;
+  font-weight: 600;
+  transition: background-position 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 2px 12px rgba(201,168,76,0.3);
+}
+.btn-gold:hover {
+  background-position: 100% 0;
+  box-shadow: 0 4px 20px rgba(201,168,76,0.4);
+}
+
+.alloc-bar { height: 4px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.alloc-fill { height: 100%; border-radius: 9999px; }
+
+.nav-active {
+  background: rgba(201,168,76,0.12);
+  color: var(--gold);
+  border: 1px solid rgba(201,168,76,0.18);
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 9999px; }
+
+.card-hover { transition: transform 0.18s ease, border-color 0.18s ease; }
+.card-hover:hover { transform: translateY(-1px); border-color: rgba(201,168,76,0.25) !important; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.8s linear infinite; }
