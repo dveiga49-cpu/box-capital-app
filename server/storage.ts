@@ -79,6 +79,7 @@ export interface IStorage {
   // Snapshots
   getSnapshotsByPortfolioId(portfolioId: number): Promise<Snapshot[]>;
   upsertSnapshot(data: InsertSnapshot): Promise<Snapshot>;
+  updateSnapshot(id: number, data: Partial<InsertSnapshot>): Promise<Snapshot>;
   deleteSnapshot(id: number): Promise<void>;
 }
 
@@ -185,6 +186,12 @@ class SqliteStorage implements IStorage {
     }
     const r = sqlite.prepare("INSERT INTO snapshots (portfolio_id, month, value, cdi, ibov, dolar) VALUES (?,?,?,?,?,?) RETURNING *")
       .get(data.portfolioId, data.month, data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null) as any;
+    return mapSnapshot(r);
+  }
+  async updateSnapshot(id: number, data: Partial<InsertSnapshot>) {
+    const r = sqlite.prepare(
+      "UPDATE snapshots SET month=?, value=?, cdi=?, ibov=?, dolar=? WHERE id=? RETURNING *"
+    ).get(data.month, data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null, id) as any;
     return mapSnapshot(r);
   }
   async deleteSnapshot(id: number) {
