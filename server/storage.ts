@@ -26,6 +26,7 @@ sqlite.exec(`
     initial_value REAL NOT NULL DEFAULT 0,
     goal REAL NOT NULL DEFAULT 500000,
     note TEXT,
+    projection_rate REAL DEFAULT 1,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS assets (
@@ -48,6 +49,9 @@ sqlite.exec(`
     dolar REAL
   );
 `);
+
+// ── Migrate: add projection_rate if not exists ───────────
+try { sqlite.exec("ALTER TABLE portfolios ADD COLUMN projection_rate REAL DEFAULT 1"); } catch {}
 
 // ── Seed admin if not exists ───────────────────────────────
 const adminExists = sqlite.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get();
@@ -88,7 +92,7 @@ function mapUser(r: any): User {
   return { id: r.id, name: r.name, email: r.email, password: r.password, role: r.role, phone: r.phone, active: !!r.active, createdAt: r.created_at };
 }
 function mapPortfolio(r: any): Portfolio {
-  return { id: r.id, userId: r.user_id, initialValue: r.initial_value, goal: r.goal, note: r.note, updatedAt: r.updated_at };
+  return { id: r.id, userId: r.user_id, initialValue: r.initial_value, goal: r.goal, note: r.note, projectionRate: r.projection_rate ?? 1, updatedAt: r.updated_at };
 }
 function mapAsset(r: any): Asset {
   return { id: r.id, portfolioId: r.portfolio_id, name: r.name, symbol: r.symbol, quantity: r.quantity, avgPrice: r.avg_price, currentPrice: r.current_price, color: r.color };
@@ -138,8 +142,8 @@ class SqliteStorage implements IStorage {
   }
   async createPortfolio(data: InsertPortfolio) {
     const r = sqlite.prepare(
-      "INSERT INTO portfolios (user_id, initial_value, goal, note) VALUES (?,?,?,?) RETURNING *"
-    ).get(data.userId, data.initialValue ?? 0, data.goal ?? 500000, data.note ?? null) as any;
+      "INSERT INTO portfolios (user_id, initial_value, goal, note, projection_rate) VALUES (?,?,?,?,?) RETURNING *"
+    ).get(data.userId, data.initialValue ?? 0, data.goal ?? 500000, data.note ?? null, data.projectionRate ?? 1) as any;
     return mapPortfolio(r);
   }
   async updatePortfolio(id: number, data: Partial<InsertPortfolio>) {
@@ -152,6 +156,7 @@ class SqliteStorage implements IStorage {
       .get(...Object.values(snakeData), id) as any;
     return mapPortfolio(r);
   }
+
   async getAssetsByPortfolioId(portfolioId: number) {
     return (sqlite.prepare("SELECT * FROM assets WHERE portfolio_id=? ORDER BY name").all(portfolioId) as any[]).map(mapAsset);
   }
