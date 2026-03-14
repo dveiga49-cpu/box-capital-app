@@ -55,6 +55,10 @@ export const snapshots = sqliteTable("snapshots", {
   portfolioId: integer("portfolio_id").notNull().references(() => portfolios.id),
   month:       text("month").notNull(),  // "2025-01"
   value:       real("value").notNull(),
+  // Benchmark comparison (annual % returns for the year of this snapshot)
+  cdi:         real("cdi"),         // CDI annual return %
+  ibov:        real("ibov"),        // IBOVESPA annual return %
+  dolar:       real("dolar"),       // USD/BRL annual return %
 });
 
 export const insertSnapshotSchema = createInsertSchema(snapshots).omit({ id: true });
