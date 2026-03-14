@@ -42,7 +42,10 @@ sqlite.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     portfolio_id INTEGER NOT NULL REFERENCES portfolios(id),
     month TEXT NOT NULL,
-    value REAL NOT NULL
+    value REAL NOT NULL,
+    cdi REAL,
+    ibov REAL,
+    dolar REAL
   );
 `);
 
@@ -90,7 +93,7 @@ function mapAsset(r: any): Asset {
   return { id: r.id, portfolioId: r.portfolio_id, name: r.name, symbol: r.symbol, quantity: r.quantity, avgPrice: r.avg_price, currentPrice: r.current_price, color: r.color };
 }
 function mapSnapshot(r: any): Snapshot {
-  return { id: r.id, portfolioId: r.portfolio_id, month: r.month, value: r.value };
+  return { id: r.id, portfolioId: r.portfolio_id, month: r.month, value: r.value, cdi: r.cdi ?? null, ibov: r.ibov ?? null, dolar: r.dolar ?? null };
 }
 
 class SqliteStorage implements IStorage {
@@ -176,11 +179,12 @@ class SqliteStorage implements IStorage {
   async upsertSnapshot(data: InsertSnapshot) {
     const existing = sqlite.prepare("SELECT id FROM snapshots WHERE portfolio_id=? AND month=?").get(data.portfolioId, data.month) as { id: number } | undefined;
     if (existing) {
-      const r = sqlite.prepare("UPDATE snapshots SET value=? WHERE id=? RETURNING *").get(data.value, existing.id) as any;
+      const r = sqlite.prepare("UPDATE snapshots SET value=?, cdi=?, ibov=?, dolar=? WHERE id=? RETURNING *")
+        .get(data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null, existing.id) as any;
       return mapSnapshot(r);
     }
-    const r = sqlite.prepare("INSERT INTO snapshots (portfolio_id, month, value) VALUES (?,?,?) RETURNING *")
-      .get(data.portfolioId, data.month, data.value) as any;
+    const r = sqlite.prepare("INSERT INTO snapshots (portfolio_id, month, value, cdi, ibov, dolar) VALUES (?,?,?,?,?,?) RETURNING *")
+      .get(data.portfolioId, data.month, data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null) as any;
     return mapSnapshot(r);
   }
   async deleteSnapshot(id: number) {
