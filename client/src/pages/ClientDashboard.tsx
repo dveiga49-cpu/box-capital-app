@@ -118,7 +118,7 @@ export default function ClientDashboard({ user }: Props) {
   const [, nav] = useLocation();
   const qc = useQueryClient();
   const [hidden, setHidden] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "portfolio" | "benchmark">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "benchmark">("overview");
 
   const { data, isLoading } = useQuery<{ portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[] }>({
     queryKey: ["/api/portfolio", user.id],
@@ -227,9 +227,8 @@ export default function ClientDashboard({ user }: Props) {
       <div className="border-b border-border px-4 md:px-6 bg-[#0d0f14]/80">
         <nav className="flex gap-0">
           {([
-            { key: "overview",   label: "Visão Geral" },
-            { key: "portfolio",  label: "Portfólio" },
-            { key: "benchmark",  label: "Comparativo" },
+            { key: "overview",  label: "Visão Geral" },
+            { key: "benchmark", label: "Comparativo" },
           ] as const).map(t => (
             <button
               key={t.key}
@@ -470,7 +469,6 @@ export default function ClientDashboard({ user }: Props) {
                       dataKey="projected"
                       stroke="#60a5fa"
                       strokeWidth={2}
-                      strokeDasharray="6 3"
                       fill="url(#projGrad)"
                       dot={{ fill: "#60a5fa", r: 3, strokeWidth: 0 }}
                       activeDot={{ r: 5, fill: "#60a5fa", stroke: "#0d0f14", strokeWidth: 2 }}
@@ -483,105 +481,6 @@ export default function ClientDashboard({ user }: Props) {
               </div>
             )}
           </>
-        )}
-
-        {/* ══════════════════ TAB: PORTFÓLIO ══════════════════ */}
-        {activeTab === "portfolio" && (
-          <div className="space-y-4">
-            <div
-              className="rounded-2xl p-5"
-              style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.12)" }}
-            >
-              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2"><path d="M2 20h20M5 20V10l7-7 7 7v10"/></svg>
-                Composição do Portfólio
-              </h3>
-
-              {assets.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-10">
-                  Portfólio em configuração. Em breve seus ativos aparecerão aqui.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {assets.map(a => {
-                    const val = a.quantity * a.currentPrice;
-                    const pct = total > 0 ? (val / total) * 100 : 0;
-                    const ret = a.avgPrice > 0 ? ((a.currentPrice - a.avgPrice) / a.avgPrice) * 100 : null;
-                    return (
-                      <div
-                        key={a.id}
-                        className="rounded-xl p-3.5 flex items-center justify-between gap-3"
-                        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className="w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white"
-                            style={{ background: a.color + "25", border: `1px solid ${a.color}40` }}
-                          >
-                            <span style={{ color: a.color }}>{a.symbol.slice(0, 3)}</span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{a.name}</p>
-                            <p className="text-[11px] text-muted-foreground">{a.quantity} {a.symbol}</p>
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p
-                            className="text-sm font-bold text-white tabular transition-all"
-                            style={{ filter: hidden ? "blur(6px)" : "none" }}
-                          >
-                            {fmtBRL(val)}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">{pct.toFixed(1)}% da carteira</p>
-                          {ret !== null && (
-                            <p className={`text-[11px] font-semibold ${ret >= 0 ? "text-green-400" : "text-red-400"}`}>
-                              {fmtPct(ret)} retorno
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Allocation donut-style bar */}
-            {assets.length > 0 && (
-              <div
-                className="rounded-2xl p-5"
-                style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.12)" }}
-              >
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">Alocação</h3>
-                <div className="flex h-4 rounded-full overflow-hidden gap-px">
-                  {assets.map(a => {
-                    const val = a.quantity * a.currentPrice;
-                    const pct = total > 0 ? (val / total) * 100 : 0;
-                    return (
-                      <div
-                        key={a.id}
-                        style={{ width: pct + "%", background: a.color, transition: "width 0.8s ease" }}
-                        title={`${a.name}: ${pct.toFixed(1)}%`}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4">
-                  {assets.map(a => {
-                    const val = a.quantity * a.currentPrice;
-                    const pct = total > 0 ? (val / total) * 100 : 0;
-                    return (
-                      <div key={a.id} className="flex items-center gap-1.5 text-xs">
-                        <div className="w-2.5 h-2.5 rounded-sm" style={{ background: a.color }} />
-                        <span className="text-muted-foreground">{a.name}</span>
-                        <span className="font-semibold text-white">{pct.toFixed(1)}%</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
         )}
 
         {/* ══════════════════ TAB: COMPARATIVO ══════════════════ */}
