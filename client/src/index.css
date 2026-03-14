@@ -40,6 +40,7 @@
   }
 }
 
+/* Gold accent utilities */
 .text-gold { color: var(--gold); }
 .text-gold-light { color: var(--gold-light); }
 .bg-gold { background-color: var(--gold); }
@@ -47,8 +48,10 @@
 .text-success { color: var(--success); }
 .text-danger { color: var(--danger); }
 
+/* Number formatting */
 .tabular { font-variant-numeric: tabular-nums lining-nums; }
 
+/* Gold gradient button */
 .btn-gold {
   background: linear-gradient(135deg, #C9A84C 0%, #e8c878 50%, #C9A84C 100%);
   background-size: 200% 100%;
@@ -62,19 +65,23 @@
   box-shadow: 0 4px 20px rgba(201,168,76,0.4);
 }
 
+/* Alloc bar */
 .alloc-bar { height: 4px; border-radius: 9999px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .alloc-fill { height: 100%; border-radius: 9999px; }
 
+/* Sidebar nav active */
 .nav-active {
   background: rgba(201,168,76,0.12);
   color: var(--gold);
   border: 1px solid rgba(201,168,76,0.18);
 }
 
+/* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 9999px; }
 
+/* Card hover lift */
 .card-hover { transition: transform 0.18s ease, border-color 0.18s ease; }
 .card-hover:hover { transform: translateY(-1px); border-color: rgba(201,168,76,0.25) !important; }
 

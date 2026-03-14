@@ -9,16 +9,17 @@ declare module "express-session" {
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) return res.status(401).json({ error: "N\u00e3o autenticado" });
+  if (!req.session.userId) return res.status(401).json({ error: "Não autenticado" });
   next();
 }
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId || req.session.role !== "admin")
-    return res.status(403).json({ error: "Sem permiss\u00e3o" });
+    return res.status(403).json({ error: "Sem permissão" });
   next();
 }
 
 export function registerRoutes(httpServer: Server, app: Express) {
+  // ── Session middleware ──────────────────────────────────
   app.use(session({
     secret: process.env.SESSION_SECRET || "box-capital-secret-2026",
     resave: false,
@@ -31,9 +32,10 @@ export function registerRoutes(httpServer: Server, app: Express) {
     },
   }));
 
+  // ── AUTH ────────────────────────────────────────────────
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Dados inv\u00e1lidos" });
+    if (!email || !password) return res.status(400).json({ error: "Dados inválidos" });
     const user = await storage.getUserByEmail(email.toLowerCase().trim());
     if (!user || !user.active) return res.status(401).json({ error: "E-mail ou senha incorretos" });
     const ok = bcrypt.compareSync(password, user.password);
@@ -49,10 +51,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     const user = await storage.getUserById(req.session.userId!);
-    if (!user) return res.status(401).json({ error: "Sess\u00e3o inv\u00e1lida" });
+    if (!user) return res.status(401).json({ error: "Sessão inválida" });
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   });
 
+  // ── ADMIN — clientes ────────────────────────────────────
   app.get("/api/admin/clients", requireAdmin, async (_req, res) => {
     const clients = await storage.getAllClients();
     res.json(clients.map(c => ({ id: c.id, name: c.name, email: c.email, phone: c.phone, active: c.active, createdAt: c.createdAt })));
@@ -60,13 +63,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.post("/api/admin/clients", requireAdmin, async (req, res) => {
     const { name, email, password, phone } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ error: "Nome, e-mail e senha s\u00e3o obrigat\u00f3rios" });
+    if (!name || !email || !password) return res.status(400).json({ error: "Nome, e-mail e senha são obrigatórios" });
     try {
       const user = await storage.createUser({ name, email: email.toLowerCase(), password, role: "client", phone, active: true });
+      // Create empty portfolio
       await storage.createPortfolio({ userId: user.id, initialValue: 0, goal: 500000, note: null });
       res.json({ id: user.id, name: user.name, email: user.email });
     } catch (e: any) {
-      if (e.message?.includes("UNIQUE")) return res.status(409).json({ error: "E-mail j\u00e1 cadastrado" });
+      if (e.message?.includes("UNIQUE")) return res.status(409).json({ error: "E-mail já cadastrado" });
       res.status(500).json({ error: "Erro ao criar cliente" });
     }
   });
@@ -83,20 +87,22 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // ── ADMIN — password reset ──────────────────────────────
   app.post("/api/admin/clients/:id/reset-password", requireAdmin, async (req, res) => {
     const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: "Senha m\u00ednima de 6 caracteres" });
+    if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: "Senha mínima de 6 caracteres" });
     const hash = bcrypt.hashSync(newPassword, 10);
     await storage.updateUser(parseInt(req.params.id), { password: hash } as any);
     res.json({ ok: true });
   });
 
+  // ── PORTFOLIO — get (admin or owner) ───────────────────
   app.get("/api/portfolio/:userId", requireAuth, async (req, res) => {
     const targetId = parseInt(req.params.userId);
     if (req.session.role !== "admin" && req.session.userId !== targetId)
-      return res.status(403).json({ error: "Sem permiss\u00e3o" });
+      return res.status(403).json({ error: "Sem permissão" });
     const portfolio = await storage.getPortfolioByUserId(targetId);
-    if (!portfolio) return res.status(404).json({ error: "Portf\u00f3lio n\u00e3o encontrado" });
+    if (!portfolio) return res.status(404).json({ error: "Portfólio não encontrado" });
     const assets = await storage.getAssetsByPortfolioId(portfolio.id);
     const snapshots = await storage.getSnapshotsByPortfolioId(portfolio.id);
     res.json({ portfolio, assets, snapshots });
@@ -108,6 +114,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json(updated);
   });
 
+  // ── ASSETS (admin only) ─────────────────────────────────
   app.post("/api/portfolio/:portfolioId/assets", requireAdmin, async (req, res) => {
     const data = { ...req.body, portfolioId: parseInt(req.params.portfolioId) };
     const asset = await storage.createAsset(data);
@@ -124,6 +131,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // ── SNAPSHOTS (admin only) ─────────────────────────────
   app.post("/api/portfolio/:portfolioId/snapshots", requireAdmin, async (req, res) => {
     const data = { ...req.body, portfolioId: parseInt(req.params.portfolioId) };
     const snap = await storage.upsertSnapshot(data);

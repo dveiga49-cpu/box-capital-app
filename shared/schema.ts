@@ -2,12 +2,13 @@ import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// ── Users ─────────────────────────────────────────────────
 export const users = sqliteTable("users", {
   id:        integer("id").primaryKey({ autoIncrement: true }),
   name:      text("name").notNull(),
   email:     text("email").notNull().unique(),
-  password:  text("password").notNull(),
-  role:      text("role").notNull().default("client"),
+  password:  text("password").notNull(),           // bcrypt hash
+  role:      text("role").notNull().default("client"), // "admin" | "client"
   phone:     text("phone"),
   active:    integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().default(new Date().toISOString()),
@@ -17,6 +18,8 @@ export const insertUserSchema = createInsertSchema(users).omit({ id: true, creat
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// ── Portfolios ────────────────────────────────────────────
+// One portfolio per client (the admin can manage it)
 export const portfolios = sqliteTable("portfolios", {
   id:           integer("id").primaryKey({ autoIncrement: true }),
   userId:       integer("user_id").notNull().references(() => users.id),
@@ -30,6 +33,7 @@ export const insertPortfolioSchema = createInsertSchema(portfolios).omit({ id: t
 export type InsertPortfolio = z.infer<typeof insertPortfolioSchema>;
 export type Portfolio = typeof portfolios.$inferSelect;
 
+// ── Assets (positions inside a portfolio) ─────────────────
 export const assets = sqliteTable("assets", {
   id:          integer("id").primaryKey({ autoIncrement: true }),
   portfolioId: integer("portfolio_id").notNull().references(() => portfolios.id),
@@ -45,10 +49,11 @@ export const insertAssetSchema = createInsertSchema(assets).omit({ id: true });
 export type InsertAsset = z.infer<typeof insertAssetSchema>;
 export type Asset = typeof assets.$inferSelect;
 
+// ── Monthly snapshots (for the evolution chart) ───────────
 export const snapshots = sqliteTable("snapshots", {
   id:          integer("id").primaryKey({ autoIncrement: true }),
   portfolioId: integer("portfolio_id").notNull().references(() => portfolios.id),
-  month:       text("month").notNull(),
+  month:       text("month").notNull(),  // "2025-01"
   value:       real("value").notNull(),
 });
 

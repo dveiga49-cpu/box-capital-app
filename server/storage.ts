@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 const sqlite = new Database("box_capital.db");
 const db = drizzle(sqlite, { schema });
 
+// ── Create tables ──────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +46,7 @@ sqlite.exec(`
   );
 `);
 
+// ── Seed admin if not exists ───────────────────────────────
 const adminExists = sqlite.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get();
 if (!adminExists) {
   const hash = bcrypt.hashSync("admin123", 10);
@@ -52,25 +54,32 @@ if (!adminExists) {
     .run("Douglas Veiga", "admin@boxcapital.com", hash);
 }
 
+// ── IStorage interface ─────────────────────────────────────
 export interface IStorage {
+  // Auth
   getUserByEmail(email: string): Promise<User | null>;
   getUserById(id: number): Promise<User | null>;
+  // Users (admin)
   getAllClients(): Promise<User[]>;
   createUser(data: InsertUser & { password: string }): Promise<User>;
   updateUser(id: number, data: Partial<InsertUser> & { password?: string }): Promise<User>;
   deleteUser(id: number): Promise<void>;
+  // Portfolio
   getPortfolioByUserId(userId: number): Promise<Portfolio | null>;
   createPortfolio(data: InsertPortfolio): Promise<Portfolio>;
   updatePortfolio(id: number, data: Partial<InsertPortfolio>): Promise<Portfolio>;
+  // Assets
   getAssetsByPortfolioId(portfolioId: number): Promise<Asset[]>;
   createAsset(data: InsertAsset): Promise<Asset>;
   updateAsset(id: number, data: Partial<InsertAsset>): Promise<Asset>;
   deleteAsset(id: number): Promise<void>;
+  // Snapshots
   getSnapshotsByPortfolioId(portfolioId: number): Promise<Snapshot[]>;
   upsertSnapshot(data: InsertSnapshot): Promise<Snapshot>;
   deleteSnapshot(id: number): Promise<void>;
 }
 
+// ── Row mappers (snake_case → camelCase) ──────────────────
 function mapUser(r: any): User {
   return { id: r.id, name: r.name, email: r.email, password: r.password, role: r.role, phone: r.phone, active: !!r.active, createdAt: r.created_at };
 }
