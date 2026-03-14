@@ -80,9 +80,20 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.patch("/api/admin/clients/:id", requireAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
-    const { name, phone, active } = req.body;
-    const updated = await storage.updateUser(id, { name, phone, active });
-    res.json(updated);
+    const { name, email, phone, active, password } = req.body;
+    const updates: any = {};
+    if (name !== undefined)   updates.name   = name;
+    if (email !== undefined)  updates.email  = email.toLowerCase().trim();
+    if (phone !== undefined)  updates.phone  = phone;
+    if (active !== undefined) updates.active = active;
+    if (password)             updates.password = bcrypt.hashSync(password, 10);
+    try {
+      const updated = await storage.updateUser(id, updates);
+      res.json(updated);
+    } catch (e: any) {
+      if (e.message?.includes("UNIQUE")) return res.status(409).json({ error: "E-mail já cadastrado" });
+      res.status(500).json({ error: "Erro ao atualizar cliente" });
+    }
   });
 
   app.delete("/api/admin/clients/:id", requireAdmin, async (req, res) => {
@@ -138,6 +149,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/portfolio/:portfolioId/snapshots", requireAdmin, async (req, res) => {
     const data = { ...req.body, portfolioId: parseInt(req.params.portfolioId) };
     const snap = await storage.upsertSnapshot(data);
+    res.json(snap);
+  });
+
+  app.patch("/api/snapshots/:id", requireAdmin, async (req, res) => {
+    const { month, value, cdi, ibov, dolar } = req.body;
+    const snap = await storage.updateSnapshot(parseInt(req.params.id), { month, value, cdi, ibov, dolar });
     res.json(snap);
   });
 
