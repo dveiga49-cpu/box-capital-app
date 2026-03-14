@@ -21,6 +21,7 @@ export default function AdminDashboard({ user }: Props) {
   const [showAddSnap, setShowAddSnap] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // Data
   const { data: clients = [], isLoading } = useQuery<Client[]>({ queryKey: ["/api/admin/clients"] });
   const { data: portfolioData } = useQuery<PortfolioData>({
     queryKey: ["/api/portfolio", selectedClient?.id],
@@ -53,6 +54,7 @@ export default function AdminDashboard({ user }: Props) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-card px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <svg className="w-7 h-7" viewBox="0 0 48 48" fill="none">
@@ -61,25 +63,26 @@ export default function AdminDashboard({ user }: Props) {
             <path d="M4 4 L14 14M34 14 L44 4M14 34 L4 44M34 34 L44 44" stroke="#C9A84C" strokeWidth="1.5"/>
           </svg>
           <div>
-            <p className="text-sm font-bold text-gold">BOX CAPITAL STRATEGY</p>
+            <p className="text-sm font-bold text-gold" style={{ fontFamily: "Georgia, serif" }}>BOX CAPITAL STRATEGY</p>
             <p className="text-[10px] text-muted-foreground">Painel Administrativo</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground hidden sm:block">{user.name}</span>
           <span className="text-[10px] bg-yellow-500/10 text-gold px-2 py-0.5 rounded-full font-semibold">ADMIN</span>
-          <button onClick={() => logout.mutate()} className="text-muted-foreground hover:text-red-400 transition-colors p-1.5">
+          <button onClick={() => logout.mutate()} className="text-muted-foreground hover:text-red-400 transition-colors p-1.5" title="Sair">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
         </div>
       </header>
 
+      {/* Tabs */}
       <div className="border-b border-border px-6">
         <nav className="flex gap-6">
           {(["clients", "portfolio"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`py-3 text-sm font-medium border-b-2 transition-colors ${tab === t ? "border-yellow-500 text-gold" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-              {t === "clients" ? `Clientes (${clients.length})` : `Portf\u00f3lio do Cliente`}
+              {t === "clients" ? `Clientes (${clients.length})` : `Portfólio do Cliente`}
             </button>
           ))}
         </nav>
@@ -88,17 +91,20 @@ export default function AdminDashboard({ user }: Props) {
       {msg && (
         <div className="mx-6 mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-xs text-green-400 flex items-center justify-between">
           {msg}
-          <button onClick={() => setMsg("")} className="text-green-400 hover:text-green-300">&times;</button>
+          <button onClick={() => setMsg("")} className="text-green-400 hover:text-green-300">✕</button>
         </div>
       )}
 
       <main className="flex-1 p-6 max-w-5xl mx-auto w-full">
+        {/* ── TAB: CLIENTS ── */}
         {tab === "clients" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Clientes Cadastrados</h2>
-              <button onClick={() => setShowAddClient(true)} className="btn-gold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5">
-                + Novo Cliente
+              <button onClick={() => setShowAddClient(true)}
+                className="btn-gold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Novo Cliente
               </button>
             </div>
 
@@ -120,6 +126,7 @@ export default function AdminDashboard({ user }: Props) {
                       <div>
                         <p className="text-sm font-semibold">{c.name}</p>
                         <p className="text-xs text-muted-foreground">{c.email}</p>
+                        {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -128,7 +135,7 @@ export default function AdminDashboard({ user }: Props) {
                       </span>
                       <button onClick={() => { setSelectedClient(c); setTab("portfolio"); }}
                         className="text-xs border border-border px-3 py-1.5 rounded-lg hover:border-yellow-500/40 hover:text-gold transition-colors">
-                        Ver Portf\u00f3lio
+                        Ver Portfólio
                       </button>
                       <button onClick={() => { if (confirm(`Remover ${c.name}?`)) deleteClientMut.mutate(c.id); }}
                         className="text-muted-foreground hover:text-red-400 transition-colors p-1.5">
@@ -142,33 +149,42 @@ export default function AdminDashboard({ user }: Props) {
           </div>
         )}
 
+        {/* ── TAB: PORTFOLIO ── */}
         {tab === "portfolio" && (
           <div className="space-y-4">
             {!selectedClient ? (
               <div className="text-center py-12 bg-card border border-border rounded-xl">
                 <p className="text-muted-foreground text-sm">Selecione um cliente na aba Clientes.</p>
-                <button onClick={() => setTab("clients")} className="mt-3 text-gold text-sm hover:underline">&larr; Ir para Clientes</button>
+                <button onClick={() => setTab("clients")} className="mt-3 text-gold text-sm hover:underline">← Ir para Clientes</button>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <h2 className="text-base font-semibold">Portf\u00f3lio de {selectedClient.name}</h2>
+                    <h2 className="text-base font-semibold">Portfólio de {selectedClient.name}</h2>
                     <p className="text-xs text-muted-foreground">{selectedClient.email}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setShowAddAsset(true)} className="btn-gold px-3 py-1.5 rounded-lg text-xs">+ Ativo</button>
-                    <button onClick={() => setShowAddSnap(true)} className="text-xs border border-border px-3 py-1.5 rounded-lg hover:border-yellow-500/40 hover:text-gold transition-colors">+ Snapshot</button>
-                    <button onClick={() => { setTab("clients"); setSelectedClient(null); }} className="text-xs text-muted-foreground hover:text-foreground">&larr; Voltar</button>
+                    <button onClick={() => setShowAddAsset(true)}
+                      className="btn-gold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1">
+                      + Ativo
+                    </button>
+                    <button onClick={() => setShowAddSnap(true)}
+                      className="text-xs border border-border px-3 py-1.5 rounded-lg hover:border-yellow-500/40 hover:text-gold transition-colors">
+                      + Snapshot
+                    </button>
+                    <button onClick={() => { setTab("clients"); setSelectedClient(null); }}
+                      className="text-xs text-muted-foreground hover:text-foreground">← Voltar</button>
                   </div>
                 </div>
 
+                {/* Portfolio Summary */}
                 {portfolioData && (
                   <div className="bg-card border rounded-xl p-4" style={{ borderColor: "rgba(201,168,76,0.18)" }}>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Patrim\u00f4nio Total</p>
-                        <p className="text-lg font-bold tabular">{fmt(total)}</p>
+                        <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Patrimônio Total</p>
+                        <p className="text-lg font-bold text-foreground tabular">{fmt(total)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Meta</p>
@@ -179,30 +195,40 @@ export default function AdminDashboard({ user }: Props) {
                         <p className="text-lg font-bold text-gold">{(total / portfolioData.portfolio.goal * 100).toFixed(0)}%</p>
                       </div>
                     </div>
+                    {portfolioData.portfolio.note && (
+                      <p className="text-xs text-muted-foreground mt-3 border-t border-border pt-3">{portfolioData.portfolio.note}</p>
+                    )}
                   </div>
                 )}
 
+                {/* Assets table */}
                 <div className="bg-card border border-border rounded-xl p-4">
                   <h3 className="text-sm font-semibold mb-3">Ativos</h3>
                   {!portfolioData?.assets.length ? (
-                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhum ativo.</p>
+                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhum ativo. Clique em "+ Ativo" para adicionar.</p>
                   ) : (
                     <table className="w-full text-xs">
-                      <thead><tr className="border-b border-border">
-                        {["Ativo","S\u00edmbolo","Qtd.","Pre\u00e7o Atual","Valor Total","A\u00e7\u00f5es"].map(h => (
-                          <th key={h} className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{h}</th>
-                        ))}
-                      </tr></thead>
+                      <thead>
+                        <tr className="border-b border-border">
+                          {["Ativo","Símbolo","Qtd.","Preço Atual","Valor Total","Ações"].map(h => (
+                            <th key={h} className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
                       <tbody>
                         {portfolioData.assets.map(a => (
                           <tr key={a.id} className="border-b border-border/40 hover:bg-accent/30 last:border-0">
-                            <td className="py-2.5 px-2 font-semibold">{a.name}</td>
+                            <td className="py-2.5 px-2 font-semibold flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full" style={{ background: a.color }} />
+                              {a.name}
+                            </td>
                             <td className="py-2.5 px-2 text-muted-foreground">{a.symbol}</td>
                             <td className="py-2.5 px-2 tabular">{a.quantity}</td>
                             <td className="py-2.5 px-2 tabular">${a.currentPrice.toLocaleString("en-US")}</td>
                             <td className="py-2.5 px-2 tabular font-semibold">${Math.round(a.quantity * a.currentPrice).toLocaleString("en-US")}</td>
                             <td className="py-2.5 px-2">
-                              <button onClick={() => deleteAssetMut.mutate(a.id)} className="text-muted-foreground hover:text-red-400">
+                              <button onClick={() => deleteAssetMut.mutate(a.id)}
+                                className="text-muted-foreground hover:text-red-400 transition-colors">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
                               </button>
                             </td>
@@ -213,17 +239,18 @@ export default function AdminDashboard({ user }: Props) {
                   )}
                 </div>
 
+                {/* Snapshots */}
                 <div className="bg-card border border-border rounded-xl p-4">
-                  <h3 className="text-sm font-semibold mb-3">Hist\u00f3rico (Snapshots)</h3>
+                  <h3 className="text-sm font-semibold mb-3">Histórico (Snapshots)</h3>
                   {!portfolioData?.snapshots.length ? (
-                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhum snapshot.</p>
+                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhum snapshot. Clique em "+ Snapshot" para adicionar.</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {portfolioData.snapshots.map(s => (
                         <div key={s.id} className="flex items-center gap-2 bg-accent/40 rounded-lg px-3 py-2 text-xs">
                           <span className="text-muted-foreground">{s.month}</span>
                           <span className="font-semibold tabular text-gold">{fmt(s.value)}</span>
-                          <button onClick={() => deleteSnapMut.mutate(s.id)} className="text-muted-foreground hover:text-red-400 ml-1">&times;</button>
+                          <button onClick={() => deleteSnapMut.mutate(s.id)} className="text-muted-foreground hover:text-red-400 transition-colors ml-1">✕</button>
                         </div>
                       ))}
                     </div>
@@ -236,14 +263,19 @@ export default function AdminDashboard({ user }: Props) {
       </main>
 
       <footer className="text-center py-3 text-[11px] text-muted-foreground/40 border-t border-border">
-        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors">Criado com Perplexity Computer</a>
+        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors">
+          Criado com Perplexity Computer
+        </a>
       </footer>
 
+      {/* Modal: Add Client */}
       {showAddClient && <AddClientModal onClose={() => setShowAddClient(false)} onSuccess={(m) => { setMsg(m); qc.invalidateQueries({ queryKey: ["/api/admin/clients"] }); }} />}
+      {/* Modal: Add Asset */}
       {showAddAsset && selectedClient && portfolioData && (
         <AddAssetModal portfolioId={portfolioData.portfolio.id} onClose={() => setShowAddAsset(false)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient.id] })} />
       )}
+      {/* Modal: Add Snapshot */}
       {showAddSnap && selectedClient && portfolioData && (
         <AddSnapshotModal portfolioId={portfolioData.portfolio.id} onClose={() => setShowAddSnap(false)}
           onSuccess={() => qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient.id] })} />
@@ -252,13 +284,15 @@ export default function AdminDashboard({ user }: Props) {
   );
 }
 
+// ── Modals ─────────────────────────────────────────────────
+
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl fade-up">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg">&times;</button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg">✕</button>
         </div>
         {children}
       </div>
@@ -273,8 +307,8 @@ function AddClientModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
-    if (!name || !email || !password) { setErr("Preencha todos os campos obrigat\u00f3rios."); return; }
-    if (password.length < 6) { setErr("Senha m\u00ednima de 6 caracteres."); return; }
+    if (!name || !email || !password) { setErr("Preencha todos os campos obrigatórios."); return; }
+    if (password.length < 6) { setErr("Senha mínima de 6 caracteres."); return; }
     setLoading(true);
     const r = await fetch("/api/admin/clients", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, password, phone }) });
@@ -286,9 +320,9 @@ function AddClientModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
   return (
     <ModalShell title="Novo Cliente" onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <Field label="Nome completo *" value={name} onChange={setName} placeholder="Ex: Jo\u00e3o Silva" />
+        <Field label="Nome completo *" value={name} onChange={setName} placeholder="Ex: João Silva" />
         <Field label="E-mail *" value={email} onChange={setEmail} placeholder="joao@email.com" type="email" />
-        <Field label="Senha inicial *" value={password} onChange={setPassword} placeholder="M\u00ednimo 6 caracteres" type="password" />
+        <Field label="Senha inicial *" value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres" type="password" />
         <Field label="Telefone" value={phone} onChange={setPhone} placeholder="+55 11 99999-9999" />
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60">
@@ -307,7 +341,7 @@ function AddAssetModal({ portfolioId, onClose, onSuccess }: { portfolioId: numbe
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
-    if (!name || !symbol || !qty || !currPrice) { setErr("Preencha todos os campos obrigat\u00f3rios."); return; }
+    if (!name || !symbol || !qty || !currPrice) { setErr("Preencha todos os campos obrigatórios."); return; }
     setLoading(true);
     const r = await fetch(`/api/portfolio/${portfolioId}/assets`, { method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -323,13 +357,13 @@ function AddAssetModal({ portfolioId, onClose, onSuccess }: { portfolioId: numbe
       <form onSubmit={submit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Nome *" value={name} onChange={setName} placeholder="Bitcoin" />
-          <Field label="S\u00edmbolo *" value={symbol} onChange={setSymbol} placeholder="BTC" />
+          <Field label="Símbolo *" value={symbol} onChange={setSymbol} placeholder="BTC" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Quantidade *" value={qty} onChange={setQty} placeholder="1.08" type="number" />
-          <Field label="Pre\u00e7o Atual (USD) *" value={currPrice} onChange={setCurrPrice} placeholder="84200" type="number" />
+          <Field label="Preço Atual (USD) *" value={currPrice} onChange={setCurrPrice} placeholder="84200" type="number" />
         </div>
-        <Field label="Pre\u00e7o M\u00e9dio (USD)" value={avgPrice} onChange={setAvgPrice} placeholder="70000" type="number" />
+        <Field label="Preço Médio (USD)" value={avgPrice} onChange={setAvgPrice} placeholder="70000" type="number" />
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">Cor</label>
           <input type="color" value={color} onChange={e => setColor(e.target.value)}
@@ -346,32 +380,46 @@ function AddAssetModal({ portfolioId, onClose, onSuccess }: { portfolioId: numbe
 
 function AddSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: number; onClose: () => void; onSuccess: () => void }) {
   const [month, setMonth] = useState(""); const [value, setValue] = useState("");
+  const [cdi, setCdi] = useState(""); const [ibov, setIbov] = useState(""); const [dolar, setDolar] = useState("");
   const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
-    if (!month || !value) { setErr("M\u00eas e valor s\u00e3o obrigat\u00f3rios."); return; }
+    if (!month || !value) { setErr("Mês e valor são obrigatórios."); return; }
     setLoading(true);
+    const body: any = { month, value: parseFloat(value) };
+    if (cdi)   body.cdi   = parseFloat(cdi);
+    if (ibov)  body.ibov  = parseFloat(ibov);
+    if (dolar) body.dolar = parseFloat(dolar);
     const r = await fetch(`/api/portfolio/${portfolioId}/snapshots`, { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ month, value: parseFloat(value) }) });
+      body: JSON.stringify(body) });
     const d = await r.json(); setLoading(false);
     if (!r.ok) { setErr(d.error || "Erro."); return; }
     onSuccess(); onClose();
   }
 
   return (
-    <ModalShell title="Adicionar Snapshot Mensal" onClose={onClose}>
+    <ModalShell title="Atualização Patrimonial" onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">M\u00eas (AAAA-MM) *</label>
+          <label className="text-xs font-medium text-muted-foreground">Mês de referência *</label>
           <input type="month" value={month} onChange={e => setMonth(e.target.value)}
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-yellow-600/50 transition-all" />
         </div>
-        <Field label="Valor Patrimonial (USD) *" value={value} onChange={setValue} placeholder="193668" type="number" />
+        <Field label="Patrimônio do cliente (R$) *" value={value} onChange={setValue} placeholder="43935" type="number" />
+        <div className="pt-2 border-t border-border">
+          <p className="text-[11px] text-muted-foreground mb-2 font-medium">Benchmarks anuais (% do ano — opcional)</p>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="CDI %" value={cdi} onChange={setCdi} placeholder="10.82" type="number" />
+            <Field label="IBOVESPA %" value={ibov} onChange={setIbov} placeholder="-10.36" type="number" />
+            <Field label="Dólar %" value={dolar} onChange={setDolar} placeholder="27.44" type="number" />
+          </div>
+          <p className="text-[10px] text-muted-foreground/60 mt-1.5">Informe a variação % anual de cada benchmark para o comparativo no dashboard do cliente.</p>
+        </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60">
-          {loading ? "Salvando..." : "Salvar Snapshot"}
+          {loading ? "Salvando..." : "Salvar Atualização"}
         </button>
       </form>
     </ModalShell>
