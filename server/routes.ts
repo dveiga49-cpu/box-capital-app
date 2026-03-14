@@ -20,14 +20,17 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 export function registerRoutes(httpServer: Server, app: Express) {
   // ── Session middleware ──────────────────────────────────
+  // Trust Railway's reverse proxy so secure cookies work over HTTPS
+  app.set("trust proxy", 1);
+
   app.use(session({
     secret: process.env.SESSION_SECRET || "box-capital-secret-2026",
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      sameSite: "none",
+      secure: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   }));
