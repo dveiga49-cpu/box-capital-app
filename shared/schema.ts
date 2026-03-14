@@ -21,12 +21,13 @@ export type User = typeof users.$inferSelect;
 // ── Portfolios ────────────────────────────────────────────
 // One portfolio per client (the admin can manage it)
 export const portfolios = sqliteTable("portfolios", {
-  id:           integer("id").primaryKey({ autoIncrement: true }),
-  userId:       integer("user_id").notNull().references(() => users.id),
-  initialValue: real("initial_value").notNull().default(0),
-  goal:         real("goal").notNull().default(500000),
-  note:         text("note"),
-  updatedAt:    text("updated_at").notNull().default(new Date().toISOString()),
+  id:             integer("id").primaryKey({ autoIncrement: true }),
+  userId:         integer("user_id").notNull().references(() => users.id),
+  initialValue:   real("initial_value").notNull().default(0),
+  goal:           real("goal").notNull().default(500000),
+  note:           text("note"),
+  projectionRate: real("projection_rate").default(1), // % monthly growth for 2026 projection
+  updatedAt:      text("updated_at").notNull().default(new Date().toISOString()),
 });
 
 export const insertPortfolioSchema = createInsertSchema(portfolios).omit({ id: true, updatedAt: true });
