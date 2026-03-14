@@ -278,15 +278,7 @@ export default function ClientDashboard({ user }: Props) {
                     <span className="text-xs text-muted-foreground">desde o início</span>
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Rendimento</p>
-                  <p
-                    className={`text-lg font-bold tabular ${gain >= 0 ? "text-green-400" : "text-red-400"} transition-all`}
-                    style={{ filter: hidden ? "blur(8px)" : "none" }}
-                  >
-                    {gain >= 0 ? "+" : ""}{fmtBRL(gain)}
-                  </p>
-                </div>
+
               </div>
 
               {/* Progress bar */}
