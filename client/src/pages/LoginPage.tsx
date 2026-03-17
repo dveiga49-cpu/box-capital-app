@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import logoUrl from "@assets/logo-box-capital.jpg";
 
 export default function LoginPage() {
   const [, nav] = useLocation();
@@ -46,20 +47,13 @@ export default function LoginPage() {
       <div className="fade-up w-full max-w-sm bg-card border rounded-2xl p-10 shadow-2xl"
         style={{ borderColor: "rgba(201,168,76,0.18)" }}>
         {/* Logo */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <svg className="w-14 h-14" viewBox="0 0 48 48" fill="none" style={{ filter: "drop-shadow(0 0 12px rgba(201,168,76,0.3))" }}>
-            <rect x="4" y="4" width="40" height="40" rx="2" stroke="#C9A84C" strokeWidth="2" fill="none"/>
-            <path d="M14 14 L34 14 L34 34 L14 34 Z" stroke="#C9A84C" strokeWidth="1.5" fill="none"/>
-            <path d="M4 4 L14 14" stroke="#C9A84C" strokeWidth="1.5"/>
-            <path d="M34 14 L44 4" stroke="#C9A84C" strokeWidth="1.5"/>
-            <path d="M14 34 L4 44" stroke="#C9A84C" strokeWidth="1.5"/>
-            <path d="M34 34 L44 44" stroke="#C9A84C" strokeWidth="1.5"/>
-          </svg>
-          <div className="flex flex-col items-center leading-tight gap-0.5">
-            <span className="text-2xl font-bold text-gold tracking-widest" style={{ fontFamily: "Georgia, serif" }}>BOX</span>
-            <span className="text-base font-semibold text-foreground tracking-[0.2em]">CAPITAL</span>
-            <span className="text-xs text-muted-foreground tracking-[0.28em] uppercase font-medium">Strategy</span>
-          </div>
+        <div className="flex flex-col items-center mb-8">
+          <img
+            src={logoUrl}
+            alt="Box Capital Strategy"
+            className="w-64 object-contain"
+            style={{ filter: "drop-shadow(0 0 16px rgba(201,168,76,0.2))" }}
+          />
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
