@@ -235,7 +235,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (email !== undefined)  updates.email  = email.toLowerCase().trim();
     if (phone !== undefined)  updates.phone  = phone;
     if (active !== undefined) updates.active = active;
-    if (password)             updates.password = bcrypt.hashSync(password, 10);
+    if (password)             updates.password = password; // storage.updateUser handles hashing
     try {
       const updated = await storage.updateUser(id, updates);
       res.json(updated);
@@ -254,8 +254,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/admin/clients/:id/reset-password", requireAdmin, async (req, res) => {
     const { newPassword } = req.body;
     if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: "Senha mínima de 6 caracteres" });
-    const hash = bcrypt.hashSync(newPassword, 10);
-    await storage.updateUser(parseInt(req.params.id), { password: hash } as any);
+    // Pass plain text — storage.updateUser handles hashing internally
+    await storage.updateUser(parseInt(req.params.id), { password: newPassword } as any);
     res.json({ ok: true });
   });
 
@@ -327,8 +327,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
     const ok = bcrypt.compareSync(currentPassword, user.password);
     if (!ok) return res.status(401).json({ error: "Senha atual incorreta" });
-    const hash = bcrypt.hashSync(newPassword, 10);
-    await storage.updateUser(userId, { password: hash } as any);
+    // Update password directly — storage.updateUser re-hashes, so pass plain text
+    await storage.updateUser(userId, { password: newPassword } as any);
     res.json({ ok: true });
   });
 
