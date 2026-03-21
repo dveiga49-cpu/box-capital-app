@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine
@@ -233,7 +233,25 @@ export default function ClientDashboard({ user }: Props) {
   const [, nav] = useLocation();
   const qc = useQueryClient();
   const [hidden, setHidden] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "benchmark">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "benchmark" | "dados">("overview");
+
+  // Profile form state
+  const [profileName, setProfileName] = useState(user.name);
+  const [profileMsg, setProfileMsg] = useState("");
+  const [profileErr, setProfileErr] = useState("");
+
+  // Password form state
+  const [curPwd, setCurPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [confPwd, setConfPwd] = useState("");
+  const [pwdMsg, setPwdMsg] = useState("");
+  const [pwdErr, setPwdErr] = useState("");
+
+  // Goal form state
+  const [goalInput, setGoalInput] = useState("");
+  const [goalMsg, setGoalMsg] = useState("");
+  const [goalErr, setGoalErr] = useState("");
+  const goalInitialized = useRef(false);
 
   const { data, isLoading } = useQuery<{ portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[] }>({
     queryKey: ["/api/portfolio", user.id],
@@ -269,6 +287,12 @@ export default function ClientDashboard({ user }: Props) {
 
   // Last year benchmark comparison
   const lastAnnual = annualData[annualData.length - 1];
+
+  // Initialize goal input from portfolio data
+  if (portfolio && !goalInitialized.current) {
+    goalInitialized.current = true;
+    setGoalInput(String(portfolio.goal ?? ""));
+  }
 
   // Real Box Capital accumulated return (compound from all years in history)
   // Computed from BOX_CAPITAL_RETURNS for years the client has snapshots
@@ -349,6 +373,7 @@ export default function ClientDashboard({ user }: Props) {
           {([
             { key: "overview",  label: "Visão Geral" },
             { key: "benchmark", label: "Comparativo" },
+            { key: "dados",     label: "Dados" },
           ] as const).map(t => (
             <button
               key={t.key}
@@ -426,7 +451,7 @@ export default function ClientDashboard({ user }: Props) {
             {/* KPI row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiCard
-                label="Rentabilidade Box Capital"
+                label="Rentabilidade Total"
                 value={boxRealAccumPct != null ? fmtPct(boxRealAccumPct) : fmtPct(gainPct)}
                 sub="acumulada no período (dados reais)"
                 positive={(boxRealAccumPct ?? gainPct) >= 0}
@@ -916,6 +941,139 @@ export default function ClientDashboard({ user }: Props) {
             </div>
           </div>
         )}
+
+        {/* ══════════════════ TAB: DADOS ══════════════════ */}
+        {activeTab === "dados" && (
+          <div className="space-y-4 max-w-lg">
+
+            {/* ─ Nome ─ */}
+            <div className="rounded-2xl p-5" style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.12)" }}>
+              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Dados Pessoais
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">Nome</label>
+                  <input
+                    className="w-full bg-[#0d0f14] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500/50 transition-colors"
+                    value={profileName}
+                    onChange={e => setProfileName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">E-mail</label>
+                  <input
+                    className="w-full bg-[#0d0f14] border border-white/5 rounded-lg px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
+                    value={user.email}
+                    disabled
+                  />
+                  <p className="text-[10px] text-muted-foreground/50 mt-1">O e-mail só pode ser alterado pelo administrador.</p>
+                </div>
+                {profileErr && <p className="text-xs text-red-400">{profileErr}</p>}
+                {profileMsg && <p className="text-xs text-green-400">{profileMsg}</p>}
+                <button
+                  className="w-full py-2 rounded-lg text-sm font-semibold transition-all"
+                  style={{ background: "linear-gradient(135deg, #C9A84C, #a07830)", color: "#0d0f14" }}
+                  onClick={async () => {
+                    setProfileErr(""); setProfileMsg("");
+                    if (!profileName.trim()) { setProfileErr("Nome não pode ser vazio."); return; }
+                    const r = await fetch("/api/client/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: profileName.trim() }) });
+                    const d = await r.json();
+                    if (!r.ok) setProfileErr(d.error ?? "Erro ao salvar.");
+                    else { setProfileMsg("Nome atualizado com sucesso."); qc.invalidateQueries({ queryKey: ["/api/auth/me"] }); }
+                  }}
+                >
+                  Salvar Nome
+                </button>
+              </div>
+            </div>
+
+            {/* ─ Alterar Senha ─ */}
+            <div className="rounded-2xl p-5" style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.12)" }}>
+              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Alterar Senha
+              </h3>
+              <div className="space-y-3">
+                {[{label:"Senha atual", val:curPwd, set:setCurPwd}, {label:"Nova senha", val:newPwd, set:setNewPwd}, {label:"Confirmar nova senha", val:confPwd, set:setConfPwd}].map(f => (
+                  <div key={f.label}>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">{f.label}</label>
+                    <input
+                      type="password"
+                      className="w-full bg-[#0d0f14] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500/50 transition-colors"
+                      value={f.val}
+                      onChange={e => f.set(e.target.value)}
+                    />
+                  </div>
+                ))}
+                {pwdErr && <p className="text-xs text-red-400">{pwdErr}</p>}
+                {pwdMsg && <p className="text-xs text-green-400">{pwdMsg}</p>}
+                <button
+                  className="w-full py-2 rounded-lg text-sm font-semibold transition-all"
+                  style={{ background: "linear-gradient(135deg, #C9A84C, #a07830)", color: "#0d0f14" }}
+                  onClick={async () => {
+                    setPwdErr(""); setPwdMsg("");
+                    if (!curPwd || !newPwd || !confPwd) { setPwdErr("Preencha todos os campos."); return; }
+                    if (newPwd.length < 6) { setPwdErr("A nova senha deve ter no mínimo 6 caracteres."); return; }
+                    if (newPwd !== confPwd) { setPwdErr("As senhas não coincidem."); return; }
+                    const r = await fetch("/api/client/password", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: curPwd, newPassword: newPwd }) });
+                    const d = await r.json();
+                    if (!r.ok) setPwdErr(d.error ?? "Erro ao alterar senha.");
+                    else { setPwdMsg("Senha alterada com sucesso."); setCurPwd(""); setNewPwd(""); setConfPwd(""); }
+                  }}
+                >
+                  Alterar Senha
+                </button>
+              </div>
+            </div>
+
+            {/* ─ Meta de investimento ─ */}
+            <div className="rounded-2xl p-5" style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.12)" }}>
+              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                Meta de Investimento
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">Meta (R$)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="w-full bg-[#0d0f14] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500/50 transition-colors"
+                    value={goalInput}
+                    onChange={e => setGoalInput(e.target.value)}
+                    placeholder="Ex: 500000"
+                  />
+                  {portfolio?.goal && (
+                    <p className="text-[10px] text-muted-foreground/60 mt-1">
+                      Meta atual: {fmtBRL(portfolio.goal)}
+                    </p>
+                  )}
+                </div>
+                {goalErr && <p className="text-xs text-red-400">{goalErr}</p>}
+                {goalMsg && <p className="text-xs text-green-400">{goalMsg}</p>}
+                <button
+                  className="w-full py-2 rounded-lg text-sm font-semibold transition-all"
+                  style={{ background: "linear-gradient(135deg, #C9A84C, #a07830)", color: "#0d0f14" }}
+                  onClick={async () => {
+                    setGoalErr(""); setGoalMsg("");
+                    const val = parseFloat(goalInput);
+                    if (isNaN(val) || val <= 0) { setGoalErr("Insira um valor válido maior que zero."); return; }
+                    const r = await fetch("/api/client/goal", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goal: val }) });
+                    const d = await r.json();
+                    if (!r.ok) setGoalErr(d.error ?? "Erro ao salvar meta.");
+                    else { setGoalMsg("Meta atualizada com sucesso."); qc.invalidateQueries({ queryKey: ["/api/portfolio", user.id] }); }
+                  }}
+                >
+                  Salvar Meta
+                </button>
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </main>
 
       <footer className="text-center py-4 text-[11px] text-muted-foreground/30 border-t border-border">
