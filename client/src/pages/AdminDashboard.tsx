@@ -6,7 +6,7 @@ interface Props { user: { id: number; name: string; email: string; role: string 
 interface Client { id: number; name: string; email: string; phone: string | null; active: boolean; createdAt: string; }
 interface Asset { id: number; portfolioId: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
 interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; }
-interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; }
+interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
 interface PortfolioData { portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[]; }
 
 function fmtBRL(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -324,7 +324,7 @@ export default function AdminDashboard({ user }: Props) {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-border">
-                            {["Mês", "Patrimônio (R$)", "CDI %", "IBOVESPA %", "Dólar %", "Ações"].map(h => (
+                            {["Mês", "Patrimônio (R$)", "Saque (R$)", "CDI %", "IBOVESPA %", "Dólar %", "Ações"].map(h => (
                               <th key={h} className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{h}</th>
                             ))}
                           </tr>
@@ -334,6 +334,7 @@ export default function AdminDashboard({ user }: Props) {
                             <tr key={s.id} className="border-b border-border/40 last:border-0 hover:bg-accent/20 transition-colors">
                               <td className="py-2.5 px-2 font-semibold text-white">{s.month}</td>
                               <td className="py-2.5 px-2 font-semibold text-gold tabular">{fmtBRL(s.value)}</td>
+                              <td className="py-2.5 px-2 tabular">{s.withdrawal && s.withdrawal > 0 ? <span className="text-red-400 font-semibold">-{fmtBRL(s.withdrawal)}</span> : <span className="text-muted-foreground">—</span>}</td>
                               <td className="py-2.5 px-2 text-green-400 tabular">{s.cdi != null ? s.cdi + "%" : <span className="text-muted-foreground">—</span>}</td>
                               <td className="py-2.5 px-2 text-blue-400 tabular">{s.ibov != null ? s.ibov + "%" : <span className="text-muted-foreground">—</span>}</td>
                               <td className="py-2.5 px-2 text-orange-400 tabular">{s.dolar != null ? s.dolar + "%" : <span className="text-muted-foreground">—</span>}</td>
@@ -718,6 +719,7 @@ function EditAssetModal({ asset, onClose, onSuccess }: { asset: Asset; onClose: 
 // ══════════════════════════════════════════════
 function AddSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: number; onClose: () => void; onSuccess: () => void }) {
   const [month, setMonth] = useState(""); const [value, setValue] = useState("");
+  const [withdrawal, setWithdrawal] = useState("");
   const [cdi, setCdi] = useState(""); const [ibov, setIbov] = useState(""); const [dolar, setDolar] = useState("");
   const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
@@ -725,7 +727,7 @@ function AddSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: nu
     e.preventDefault(); setErr("");
     if (!month || !value) { setErr("Mês e valor são obrigatórios."); return; }
     setLoading(true);
-    const body: any = { month, value: parseFloat(value) };
+    const body: any = { month, value: parseFloat(value), withdrawal: withdrawal ? parseFloat(withdrawal) : 0 };
     if (cdi)   body.cdi   = parseFloat(cdi);
     if (ibov)  body.ibov  = parseFloat(ibov);
     if (dolar) body.dolar = parseFloat(dolar);
@@ -745,14 +747,18 @@ function AddSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: nu
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-yellow-600/50 transition-all" />
         </div>
         <Field label="Patrimônio do cliente (R$) *" value={value} onChange={setValue} placeholder="43935" type="number" />
+        <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+          <p className="text-[11px] text-red-400 font-medium mb-1.5">Saque realizado neste período</p>
+          <Field label="Valor do saque (R$) — deixe em branco se não houve" value={withdrawal} onChange={setWithdrawal} placeholder="0" type="number" />
+        </div>
         <div className="pt-2 border-t border-border">
-          <p className="text-[11px] text-muted-foreground mb-2 font-medium">Benchmarks anuais (% do ano — opcional)</p>
+          <p className="text-[11px] text-muted-foreground mb-2 font-medium">Benchmarks anuais (% do ano — preenchidos automaticamente)</p>
           <div className="grid grid-cols-3 gap-2">
-            <Field label="CDI %" value={cdi} onChange={setCdi} placeholder="10.82" type="number" />
-            <Field label="IBOVESPA %" value={ibov} onChange={setIbov} placeholder="-10.36" type="number" />
-            <Field label="Dólar %" value={dolar} onChange={setDolar} placeholder="27.44" type="number" />
+            <Field label="CDI %" value={cdi} onChange={setCdi} placeholder="auto" type="number" />
+            <Field label="IBOVESPA %" value={ibov} onChange={setIbov} placeholder="auto" type="number" />
+            <Field label="Dólar %" value={dolar} onChange={setDolar} placeholder="auto" type="number" />
           </div>
-          <p className="text-[10px] text-muted-foreground/60 mt-1.5">Informe a variação % anual para o comparativo no dashboard do cliente.</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-1.5">Deixe em branco para preenchimento automático via Banco Central.</p>
         </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60">
@@ -769,6 +775,7 @@ function AddSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: nu
 function EditSnapshotModal({ snapshot, onClose, onSuccess }: { snapshot: Snapshot; onClose: () => void; onSuccess: () => void }) {
   const [month, setMonth] = useState(snapshot.month);
   const [value, setValue] = useState(String(snapshot.value));
+  const [withdrawal, setWithdrawal] = useState(snapshot.withdrawal && snapshot.withdrawal > 0 ? String(snapshot.withdrawal) : "");
   const [cdi, setCdi] = useState(snapshot.cdi != null ? String(snapshot.cdi) : "");
   const [ibov, setIbov] = useState(snapshot.ibov != null ? String(snapshot.ibov) : "");
   const [dolar, setDolar] = useState(snapshot.dolar != null ? String(snapshot.dolar) : "");
@@ -778,7 +785,7 @@ function EditSnapshotModal({ snapshot, onClose, onSuccess }: { snapshot: Snapsho
     e.preventDefault(); setErr("");
     if (!month || !value) { setErr("Mês e valor são obrigatórios."); return; }
     setLoading(true);
-    const body: any = { month, value: parseFloat(value) };
+    const body: any = { month, value: parseFloat(value), withdrawal: withdrawal ? parseFloat(withdrawal) : 0 };
     body.cdi   = cdi   ? parseFloat(cdi)   : null;
     body.ibov  = ibov  ? parseFloat(ibov)  : null;
     body.dolar = dolar ? parseFloat(dolar) : null;
@@ -799,6 +806,10 @@ function EditSnapshotModal({ snapshot, onClose, onSuccess }: { snapshot: Snapsho
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-yellow-600/50 transition-all" />
         </div>
         <Field label="Patrimônio (R$) *" value={value} onChange={setValue} placeholder="43935" type="number" />
+        <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+          <p className="text-[11px] text-red-400 font-medium mb-1.5">Saque realizado neste período</p>
+          <Field label="Valor do saque (R$) — deixe em branco se não houve" value={withdrawal} onChange={setWithdrawal} placeholder="0" type="number" />
+        </div>
         <div className="pt-2 border-t border-border">
           <p className="text-[11px] text-muted-foreground mb-2 font-medium">Benchmarks anuais (% do ano)</p>
           <div className="grid grid-cols-3 gap-2">
