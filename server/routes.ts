@@ -41,7 +41,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       createTableIfMissing: true,
     }),
     secret: process.env.SESSION_SECRET || "box-capital-secret-2026",
-    resave: false,
+    resave: true,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
@@ -61,7 +61,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!ok) return res.status(401).json({ error: "E-mail ou senha incorretos" });
     req.session.userId = user.id;
     req.session.role   = user.role;
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    // Save session explicitly before responding to ensure it's persisted
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ error: "Erro ao salvar sessão" });
+      res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    });
   });
 
   app.post("/api/auth/logout", (req, res) => {
