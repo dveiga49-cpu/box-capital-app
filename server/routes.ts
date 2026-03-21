@@ -2,18 +2,11 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { Pool } from "pg";
+import { getPool } from "./storage";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 
 const PgSession = connectPgSimple(session);
-// Railway internal URL uses no SSL; external URLs (neon, supabase) need SSL
-const dbUrl = process.env.DATABASE_URL || "";
-const needsSsl = dbUrl.includes("neon.tech") || dbUrl.includes("supabase") || dbUrl.includes("amazonaws");
-const sessionPool = new Pool({
-  connectionString: dbUrl,
-  ssl: needsSsl ? { rejectUnauthorized: false } : false,
-});
 
 declare module "express-session" {
   interface SessionData { userId: number; role: string; }
@@ -36,7 +29,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.use(session({
     store: new PgSession({
-      pool: sessionPool,
+      pool: getPool(),
       tableName: "user_sessions",
       createTableIfMissing: true,
     }),
