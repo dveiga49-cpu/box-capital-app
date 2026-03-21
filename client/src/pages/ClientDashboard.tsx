@@ -530,11 +530,7 @@ export default function ClientDashboard({ user }: Props) {
                       Projeção 2026
                     </h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Taxa de {portfolio?.projectionRate ?? 1}% ao mês
-                      {" "}·{" "}
-                      <span className="text-blue-400 font-semibold">
-                        ~{((Math.pow(1 + (portfolio?.projectionRate ?? 1) / 100, 12) - 1) * 100).toFixed(1)}% ao ano
-                      </span>
+                      Projeção baseada em crescimento composto
                     </p>
                   </div>
                   <div className="text-right">
@@ -590,8 +586,7 @@ export default function ClientDashboard({ user }: Props) {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-                <p className="text-[10px] text-muted-foreground/50 mt-3 text-center">
-                  Projeção baseada em crescimento composto de {portfolio?.projectionRate ?? 1}% a.m. — valores estimados, não garantidos.
+                <p className="text-[10px] text-muted-foreground/50 mt-3 text-center" style={{ display: 'none' }}>
                 </p>
               </div>
             )}
