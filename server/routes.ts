@@ -7,11 +7,12 @@ import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 
 const PgSession = connectPgSimple(session);
+// Railway internal URL uses no SSL; external URLs (neon, supabase) need SSL
+const dbUrl = process.env.DATABASE_URL || "";
+const needsSsl = dbUrl.includes("neon.tech") || dbUrl.includes("supabase") || dbUrl.includes("amazonaws");
 const sessionPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("railway") || process.env.DATABASE_URL?.includes("neon")
-    ? { rejectUnauthorized: false }
-    : false,
+  connectionString: dbUrl,
+  ssl: needsSsl ? { rejectUnauthorized: false } : false,
 });
 
 declare module "express-session" {
