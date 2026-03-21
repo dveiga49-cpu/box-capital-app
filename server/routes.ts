@@ -34,10 +34,10 @@ function fetchJson(url: string): Promise<any> {
 async function fetchBenchmarks(year: number): Promise<{ cdi: number | null; ibov: number | null; dolar: number | null }> {
   const result = { cdi: null as number | null, ibov: null as number | null, dolar: null as number | null };
 
-  // ── CDI: série 4392 BCB (% mensal acumulado → anual) ────
+  // ── CDI: série 12 BCB (% diário acumulado → anual) ────
   try {
     const cdiData = await fetchJson(
-      `https://api.bcb.gov.br/dados/serie/bcdata.sgs.4392/dados?formato=json&dataInicial=01/01/${year}&dataFinal=31/12/${year}`
+      `https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados?formato=json&dataInicial=01/01/${year}&dataFinal=31/12/${year}`
     );
     if (Array.isArray(cdiData) && cdiData.length > 0) {
       let acc = 1.0;
