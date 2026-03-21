@@ -1,12 +1,79 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
+import { Store } from "express-session";
 import { getPool } from "./storage";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 
-const PgSession = connectPgSimple(session);
+// ── Custom PostgreSQL session store ────────────────────────
+// Bypasses connect-pg-simple entirely — uses the pool directly.
+class PgSessionStore extends Store {
+  private pool = getPool();
+  private ready = false;
+
+  constructor() {
+    super();
+    this.pool.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        sid TEXT PRIMARY KEY,
+        sess JSONB NOT NULL,
+        expire TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS user_sessions_expire_idx ON user_sessions (expire);
+    `)
+      .then(() => { this.ready = true; })
+      .catch(err => console.error("Session table init error:", err));
+  }
+
+  get(sid: string, callback: (err: any, session?: session.SessionData | null) => void) {
+    this.pool.query(
+      "SELECT sess FROM user_sessions WHERE sid=$1 AND expire > NOW()",
+      [sid]
+    )
+      .then(({ rows }) => {
+        if (rows.length === 0) return callback(null, null);
+        callback(null, rows[0].sess as session.SessionData);
+      })
+      .catch(err => callback(err));
+  }
+
+  set(sid: string, sessionData: session.SessionData, callback?: (err?: any) => void) {
+    const expire = (sessionData.cookie?.expires)
+      ? new Date(sessionData.cookie.expires)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    this.pool.query(
+      `INSERT INTO user_sessions (sid, sess, expire)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (sid) DO UPDATE
+       SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`,
+      [sid, JSON.stringify(sessionData), expire]
+    )
+      .then(() => callback?.())
+      .catch(err => callback?.(err));
+  }
+
+  destroy(sid: string, callback?: (err?: any) => void) {
+    this.pool.query("DELETE FROM user_sessions WHERE sid=$1", [sid])
+      .then(() => callback?.())
+      .catch(err => callback?.(err));
+  }
+
+  // Periodically clean expired sessions
+  touch(sid: string, session: session.SessionData, callback?: () => void) {
+    const expire = (session.cookie?.expires)
+      ? new Date(session.cookie.expires)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    this.pool.query(
+      "UPDATE user_sessions SET expire=$2 WHERE sid=$1",
+      [sid, expire]
+    )
+      .then(() => callback?.())
+      .catch(() => callback?.());
+  }
+}
 
 declare module "express-session" {
   interface SessionData { userId: number; role: string; }
@@ -28,13 +95,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.set("trust proxy", 1);
 
   app.use(session({
-    store: new PgSession({
-      pool: getPool(),
-      tableName: "user_sessions",
-      createTableIfMissing: true,
-    }),
+    store: new PgSessionStore(),
     secret: process.env.SESSION_SECRET || "box-capital-secret-2026",
-    resave: true,
+    resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
@@ -54,11 +117,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!ok) return res.status(401).json({ error: "E-mail ou senha incorretos" });
     req.session.userId = user.id;
     req.session.role   = user.role;
-    // Save session explicitly before responding to ensure it's persisted
-    req.session.save((err) => {
-      if (err) return res.status(500).json({ error: "Erro ao salvar sessão" });
-      res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
-    });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   });
 
   app.post("/api/auth/logout", (req, res) => {
@@ -86,7 +145,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       await storage.createPortfolio({ userId: user.id, initialValue: 0, goal: 500000, note: null });
       res.json({ id: user.id, name: user.name, email: user.email });
     } catch (e: any) {
-      if (e.message?.includes("UNIQUE")) return res.status(409).json({ error: "E-mail já cadastrado" });
+      if (e.message?.includes("UNIQUE") || e.code === "23505") return res.status(409).json({ error: "E-mail já cadastrado" });
       res.status(500).json({ error: "Erro ao criar cliente" });
     }
   });
@@ -104,7 +163,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const updated = await storage.updateUser(id, updates);
       res.json(updated);
     } catch (e: any) {
-      if (e.message?.includes("UNIQUE")) return res.status(409).json({ error: "E-mail já cadastrado" });
+      if (e.message?.includes("UNIQUE") || e.code === "23505") return res.status(409).json({ error: "E-mail já cadastrado" });
       res.status(500).json({ error: "Erro ao atualizar cliente" });
     }
   });
@@ -136,8 +195,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.patch("/api/portfolio/:id", requireAdmin, async (req, res) => {
-    const { goal, note, initialValue } = req.body;
-    const updated = await storage.updatePortfolio(parseInt(req.params.id), { goal, note, initialValue });
+    const { goal, note, initialValue, projectionRate } = req.body;
+    const updated = await storage.updatePortfolio(parseInt(req.params.id), { goal, note, initialValue, projectionRate });
     res.json(updated);
   });
 
