@@ -52,8 +52,11 @@ async function initDb() {
       value REAL NOT NULL,
       cdi REAL,
       ibov REAL,
-      dolar REAL
+      dolar REAL,
+      withdrawal REAL DEFAULT 0
     );
+    -- Add withdrawal column if not exists (safe migration)
+    ALTER TABLE snapshots ADD COLUMN IF NOT EXISTS withdrawal REAL DEFAULT 0;
   `);
 
   // Seed admin if not exists
@@ -103,7 +106,7 @@ function mapAsset(r: any): Asset {
   return { id: r.id, portfolioId: r.portfolio_id, name: r.name, symbol: r.symbol, quantity: parseFloat(r.quantity), avgPrice: parseFloat(r.avg_price), currentPrice: parseFloat(r.current_price), color: r.color };
 }
 function mapSnapshot(r: any): Snapshot {
-  return { id: r.id, portfolioId: r.portfolio_id, month: r.month, value: parseFloat(r.value), cdi: r.cdi != null ? parseFloat(r.cdi) : null, ibov: r.ibov != null ? parseFloat(r.ibov) : null, dolar: r.dolar != null ? parseFloat(r.dolar) : null };
+  return { id: r.id, portfolioId: r.portfolio_id, month: r.month, value: parseFloat(r.value), cdi: r.cdi != null ? parseFloat(r.cdi) : null, ibov: r.ibov != null ? parseFloat(r.ibov) : null, dolar: r.dolar != null ? parseFloat(r.dolar) : null, withdrawal: r.withdrawal != null ? parseFloat(r.withdrawal) : 0 };
 }
 
 // ── PostgreSQL Storage ─────────────────────────────────────
@@ -225,21 +228,21 @@ class PgStorage implements IStorage {
     );
     if (existing.length > 0) {
       const { rows } = await pool.query(
-        "UPDATE snapshots SET value=$1, cdi=$2, ibov=$3, dolar=$4 WHERE id=$5 RETURNING *",
-        [data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null, existing[0].id]
+        "UPDATE snapshots SET value=$1, cdi=$2, ibov=$3, dolar=$4, withdrawal=$5 WHERE id=$6 RETURNING *",
+        [data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null, (data as any).withdrawal ?? 0, existing[0].id]
       );
       return mapSnapshot(rows[0]);
     }
     const { rows } = await pool.query(
-      "INSERT INTO snapshots (portfolio_id, month, value, cdi, ibov, dolar) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
-      [data.portfolioId, data.month, data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null]
+      "INSERT INTO snapshots (portfolio_id, month, value, cdi, ibov, dolar, withdrawal) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+      [data.portfolioId, data.month, data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null, (data as any).withdrawal ?? 0]
     );
     return mapSnapshot(rows[0]);
   }
   async updateSnapshot(id: number, data: Partial<InsertSnapshot>) {
     const { rows } = await pool.query(
-      "UPDATE snapshots SET month=$1, value=$2, cdi=$3, ibov=$4, dolar=$5 WHERE id=$6 RETURNING *",
-      [data.month, data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null, id]
+      "UPDATE snapshots SET month=$1, value=$2, cdi=$3, ibov=$4, dolar=$5, withdrawal=$6 WHERE id=$7 RETURNING *",
+      [data.month, data.value, data.cdi ?? null, data.ibov ?? null, data.dolar ?? null, (data as any).withdrawal ?? 0, id]
     );
     return mapSnapshot(rows[0]);
   }
