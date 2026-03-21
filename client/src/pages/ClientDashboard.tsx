@@ -9,7 +9,7 @@ import {
 interface Props { user: { id: number; name: string; email: string; role: string }; }
 interface Asset { id: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
 interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; updatedAt: string; }
-interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; }
+interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function greeting() {
@@ -32,7 +32,7 @@ function labelMonth(m: string) {
 }
 
 // Aggregate snapshots by year: pick December (or last available month) for patrimony
-// and carry CDI/IBOV/Dolar from that row
+// Sum all withdrawals within the year
 function buildAnnualData(snapshots: Snapshot[], initialValue: number) {
   if (!snapshots.length) return [];
   const byYear: Record<string, Snapshot[]> = {};
@@ -41,19 +41,23 @@ function buildAnnualData(snapshots: Snapshot[], initialValue: number) {
     if (!byYear[yr]) byYear[yr] = [];
     byYear[yr].push(s);
   }
-  // Sort years
   const years = Object.keys(byYear).sort();
-  // For each year pick the latest snapshot (usually December)
   const annual = years.map(yr => {
     const snaps = byYear[yr].sort((a, b) => a.month.localeCompare(b.month));
     const last = snaps[snaps.length - 1];
-    return { year: yr, snap: last };
+    // Sum all withdrawals in the year
+    const totalWithdrawal = snaps.reduce((sum, s) => sum + (s.withdrawal ?? 0), 0);
+    return { year: yr, snap: last, totalWithdrawal };
   });
 
   // Compute % growth vs. the previous year (or initial value for first year)
+  // For years with withdrawals: adjust previous value to account for the withdrawal
   return annual.map((d, i) => {
     const prevValue = i === 0 ? initialValue : annual[i - 1].snap.value;
-    const boxPct = prevValue > 0 ? ((d.snap.value - prevValue) / prevValue) * 100 : 0;
+    // If there was a withdrawal, the "real" growth is from prevValue to (currentValue + withdrawal)
+    // so we add withdrawal back to show what growth would have been without it
+    const effectiveValue = d.snap.value + d.totalWithdrawal;
+    const boxPct = prevValue > 0 ? ((effectiveValue - prevValue) / prevValue) * 100 : 0;
     return {
       year: d.year,
       patrimonio: d.snap.value,
@@ -61,6 +65,7 @@ function buildAnnualData(snapshots: Snapshot[], initialValue: number) {
       cdi: d.snap.cdi ?? null,
       ibov: d.snap.ibov ?? null,
       dolar: d.snap.dolar ?? null,
+      withdrawal: d.totalWithdrawal > 0 ? d.totalWithdrawal : null,
     };
   });
 }
@@ -68,8 +73,9 @@ function buildAnnualData(snapshots: Snapshot[], initialValue: number) {
 // Custom tooltip for the comparison chart
 function BenchmarkTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
   return (
-    <div className="bg-[#1a1c24] border border-[rgba(201,168,76,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs space-y-1.5 min-w-[160px]">
+    <div className="bg-[#1a1c24] border border-[rgba(201,168,76,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs space-y-1.5 min-w-[170px]">
       <p className="text-gold font-bold text-sm mb-2">{label}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center justify-between gap-4">
@@ -82,20 +88,51 @@ function BenchmarkTooltip({ active, payload, label }: any) {
           </span>
         </div>
       ))}
+      {d?.withdrawal > 0 && (
+        <div className="flex items-center justify-between gap-4 pt-1.5 mt-0.5 border-t border-white/5">
+          <span className="text-red-400 flex items-center gap-1">
+            <span className="text-[9px]">&#9660;</span> Saque
+          </span>
+          <span className="font-bold text-red-400 tabular">-{fmtBRL(d.withdrawal)}</span>
+        </div>
+      )}
     </div>
+  );
+}
+
+// Custom dot with withdrawal marker for area/bar charts
+function WithdrawalDot(props: any) {
+  const { cx, cy, payload } = props;
+  if (!payload?.withdrawal) return null;
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={7} fill="#ef4444" stroke="#0d0f14" strokeWidth={2} />
+      <text x={cx} y={cy - 14} textAnchor="middle" fill="#ef4444" fontSize={9} fontWeight="bold">
+        -{(payload.withdrawal / 1000).toFixed(0)}k
+      </text>
+    </g>
   );
 }
 
 // Custom tooltip for patrimony area chart
 function PatrimonyTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
   return (
-    <div className="bg-[#1a1c24] border border-[rgba(201,168,76,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs min-w-[160px]">
+    <div className="bg-[#1a1c24] border border-[rgba(201,168,76,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs min-w-[170px]">
       <p className="text-gold font-bold text-sm mb-2">{label}</p>
       <div className="flex items-center justify-between gap-4">
         <span className="text-muted-foreground">Patrimônio</span>
         <span className="font-bold text-white tabular">{fmtBRL(payload[0]?.value ?? 0)}</span>
       </div>
+      {d?.withdrawal > 0 && (
+        <div className="flex items-center justify-between gap-4 mt-1.5 pt-1.5 border-t border-white/5">
+          <span className="text-red-400 flex items-center gap-1">
+            <span className="text-[9px]">&#9660;</span> Saque
+          </span>
+          <span className="font-bold text-red-400 tabular">-{fmtBRL(d.withdrawal)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -149,14 +186,8 @@ export default function ClientDashboard({ user }: Props) {
   const gainPct = initialValue > 0 ? (gain / initialValue) * 100 : 0;
   const goalPct = goal > 0 ? Math.min((total / goal) * 100, 100) : 0;
 
-  // Annual data for charts
+  // Annual data for charts (used in both Visão Geral and Comparativo)
   const annualData = useMemo(() => buildAnnualData(snapshots, initialValue), [snapshots, initialValue]);
-
-  // Monthly data for area chart (all snapshots)
-  const monthlyData = useMemo(() =>
-    snapshots.map(s => ({ label: labelMonth(s.month), value: s.value })),
-    [snapshots]
-  );
 
   // Last year benchmark comparison
   const lastAnnual = annualData[annualData.length - 1];
@@ -333,7 +364,7 @@ export default function ClientDashboard({ user }: Props) {
               )}
             </div>
 
-            {/* Patrimony evolution chart */}
+            {/* Patrimony evolution chart — annual cumulative */}
             <div
               className="rounded-2xl p-5"
               style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.12)" }}
@@ -344,15 +375,19 @@ export default function ClientDashboard({ user }: Props) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                     Evolução Patrimonial
                   </h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Histórico mensal do seu patrimônio</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Somatório anual do seu patrimônio
+                    {annualData.some(d => d.withdrawal) && (
+                      <span className="ml-2 text-red-400">· ● saque</span>
+                    )}
+                  </p>
                 </div>
                 <span className="text-[10px] bg-yellow-500/10 text-gold px-2.5 py-1 rounded-full font-semibold">
-                  {snapshots.length} registros
+                  {annualData.length} anos
                 </span>
               </div>
-              {monthlyData.length > 1 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={monthlyData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+              {annualData.length > 1 ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={annualData} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#C9A84C" stopOpacity={0.25} />
@@ -361,11 +396,10 @@ export default function ClientDashboard({ user }: Props) {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis
-                      dataKey="label"
-                      tick={{ fill: "#6b7280", fontSize: 10 }}
+                      dataKey="year"
+                      tick={{ fill: "#6b7280", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
-                      interval="preserveStartEnd"
                     />
                     <YAxis
                       tick={{ fill: "#6b7280", fontSize: 10 }}
@@ -377,17 +411,17 @@ export default function ClientDashboard({ user }: Props) {
                     <Tooltip content={<PatrimonyTooltip />} cursor={{ stroke: "rgba(201,168,76,0.3)", strokeWidth: 1 }} />
                     <Area
                       type="monotone"
-                      dataKey="value"
+                      dataKey="patrimonio"
                       stroke="#C9A84C"
                       strokeWidth={2.5}
                       fill="url(#goldGrad)"
-                      dot={false}
+                      dot={<WithdrawalDot />}
                       activeDot={{ r: 5, fill: "#C9A84C", stroke: "#0d0f14", strokeWidth: 2 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                <div className="h-[240px] flex items-center justify-center text-sm text-muted-foreground">
                   Histórico em construção...
                 </div>
               )}
@@ -517,6 +551,17 @@ export default function ClientDashboard({ user }: Props) {
                         iconSize={8}
                       />
                       <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
+                      {/* Vertical markers for years with withdrawals */}
+                      {annualData.filter(d => d.withdrawal).map(d => (
+                        <ReferenceLine
+                          key={d.year}
+                          x={d.year}
+                          stroke="#ef4444"
+                          strokeWidth={1.5}
+                          strokeDasharray="3 3"
+                          label={{ value: `\u2193saque`, position: "insideTopRight", fill: "#ef4444", fontSize: 9 }}
+                        />
+                      ))}
                       <Line
                         type="monotone"
                         dataKey="boxPct"
@@ -568,7 +613,7 @@ export default function ClientDashboard({ user }: Props) {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-white/5">
-                          {["Ano", "Box Capital", "CDI", "IBOVESPA", "Dólar", "vs CDI"].map(h => (
+                          {["Ano", "Box Capital", "CDI", "IBOVESPA", "Dólar", "vs CDI", "Saque"].map(h => (
                             <th key={h} className="text-left py-2.5 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold first:pl-0">
                               {h}
                             </th>
@@ -597,6 +642,11 @@ export default function ClientDashboard({ user }: Props) {
                                   <span className={`font-semibold ${vsCdi >= 0 ? "text-green-400" : "text-red-400"}`}>
                                     {vsCdi >= 0 ? "+" : ""}{vsCdi.toFixed(2)}%
                                   </span>
+                                ) : <span className="text-muted-foreground">—</span>}
+                              </td>
+                              <td className="py-3 px-3">
+                                {d.withdrawal ? (
+                                  <span className="text-red-400 font-semibold">-{fmtBRL(d.withdrawal)}</span>
                                 ) : <span className="text-muted-foreground">—</span>}
                               </td>
                             </tr>
