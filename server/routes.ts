@@ -5,6 +5,83 @@ import { Store } from "express-session";
 import { getPool } from "./storage";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+import https from "https";
+import http from "http";
+
+// ── Benchmark fetcher (CDI / IBOV / Dólar) ─────────────────
+function fetchJson(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith("https") ? https : http;
+    const req = lib.get(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; BoxCapital/1.0)",
+        "Accept": "application/json",
+      }
+    }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => data += chunk);
+      res.on("end", () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(new Error("Invalid JSON: " + data.slice(0, 200))); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(10000, () => { req.destroy(); reject(new Error("Timeout")); });
+  });
+}
+
+// Returns { cdi, ibov, dolar } for a given year (all as % annual)
+async function fetchBenchmarks(year: number): Promise<{ cdi: number | null; ibov: number | null; dolar: number | null }> {
+  const result = { cdi: null as number | null, ibov: null as number | null, dolar: null as number | null };
+
+  // ── CDI: série 4392 BCB (% mensal acumulado → anual) ────
+  try {
+    const cdiData = await fetchJson(
+      `https://api.bcb.gov.br/dados/serie/bcdata.sgs.4392/dados?formato=json&dataInicial=01/01/${year}&dataFinal=31/12/${year}`
+    );
+    if (Array.isArray(cdiData) && cdiData.length > 0) {
+      let acc = 1.0;
+      for (const d of cdiData) acc *= (1 + parseFloat(d.valor) / 100);
+      result.cdi = parseFloat(((acc - 1) * 100).toFixed(2));
+    }
+  } catch (e) { console.error("CDI fetch error:", e); }
+
+  // ── Dólar: PTAX BCB (primeiro dia útil vs último dia útil do ano) ──
+  try {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    // First business day of the year
+    const startUrl = `https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@dataInicial='${pad(1)}-${pad(2)}-${year}'&@dataFinalCotacao='${pad(1)}-${pad(10)}-${year}'&$top=1&$orderby=dataHoraCotacao%20asc&$format=json&$select=cotacaoVenda,dataHoraCotacao`;
+    // Last business day of the year
+    const endUrl   = `https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@dataInicial='12-${pad(26)}-${year}'&@dataFinalCotacao='12-${pad(31)}-${year}'&$top=10&$format=json&$select=cotacaoVenda,dataHoraCotacao`;
+
+    const [startData, endData] = await Promise.all([fetchJson(startUrl), fetchJson(endUrl)]);
+    const startVals = startData?.value ?? [];
+    const endVals   = endData?.value   ?? [];
+    if (startVals.length > 0 && endVals.length > 0) {
+      const startRate = parseFloat(startVals[0].cotacaoVenda);
+      const endRate   = parseFloat(endVals[endVals.length - 1].cotacaoVenda);
+      result.dolar = parseFloat((((endRate - startRate) / startRate) * 100).toFixed(2));
+    }
+  } catch (e) { console.error("Dólar fetch error:", e); }
+
+  // ── IBOV: Yahoo Finance (primeiro vs último fechamento do ano) ──
+  try {
+    const periodStart = Math.floor(new Date(`${year}-01-01T00:00:00Z`).getTime() / 1000);
+    const periodEnd   = Math.floor(new Date(`${year}-12-31T23:59:59Z`).getTime() / 1000);
+    const ibovData = await fetchJson(
+      `https://query2.finance.yahoo.com/v8/finance/chart/%5EBVSP?period1=${periodStart}&period2=${periodEnd}&interval=1mo`
+    );
+    const closes = ibovData?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+    const valid = closes.filter((c: any) => c !== null && c !== undefined);
+    if (valid.length >= 2) {
+      const first = valid[0];
+      const last  = valid[valid.length - 1];
+      result.ibov = parseFloat((((last - first) / first) * 100).toFixed(2));
+    }
+  } catch (e) { console.error("IBOV fetch error:", e); }
+
+  return result;
+}
 
 // ── Custom PostgreSQL session store ────────────────────────
 // Bypasses connect-pg-simple entirely — uses the pool directly.
@@ -217,9 +294,42 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // ── BENCHMARKS (public cache endpoint) ──────────────────
+  app.get("/api/benchmarks/:year", requireAuth, async (req, res) => {
+    const year = parseInt(req.params.year);
+    if (isNaN(year) || year < 2000 || year > 2100)
+      return res.status(400).json({ error: "Ano inválido" });
+    try {
+      const data = await fetchBenchmarks(year);
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: "Erro ao buscar benchmarks" });
+    }
+  });
+
   // ── SNAPSHOTS (admin only) ─────────────────────────────
   app.post("/api/portfolio/:portfolioId/snapshots", requireAdmin, async (req, res) => {
-    const data = { ...req.body, portfolioId: parseInt(req.params.portfolioId) };
+    const portfolioId = parseInt(req.params.portfolioId);
+    const body = req.body;
+
+    // Auto-fetch benchmarks if not provided and month ends in -12 (annual snapshot)
+    let { cdi, ibov, dolar } = body;
+    if ((cdi === undefined || cdi === null) && body.month) {
+      const yearStr = body.month.split("-")[0];
+      const year = parseInt(yearStr);
+      if (!isNaN(year) && year >= 2000 && year <= new Date().getFullYear()) {
+        try {
+          const benchmarks = await fetchBenchmarks(year);
+          cdi   = cdi   ?? benchmarks.cdi;
+          ibov  = ibov  ?? benchmarks.ibov;
+          dolar = dolar ?? benchmarks.dolar;
+        } catch (e) {
+          console.error("Auto-benchmark fetch failed:", e);
+        }
+      }
+    }
+
+    const data = { ...body, portfolioId, cdi, ibov, dolar };
     const snap = await storage.upsertSnapshot(data);
     res.json(snap);
   });
