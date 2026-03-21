@@ -171,11 +171,12 @@ function KpiCard({ label, value, sub, positive }: { label: string; value: string
   );
 }
 
-// Build cumulative index: simulates R$100 invested from the first year growing year by year
+// Build cumulative index: simulates R$1.000 invested from the first year growing year by year
 // Uses real Box Capital historical data (sócio com sorteio)
+const SIMULATION_BASE = 1000;
 function buildCumulativeData(annualData: ReturnType<typeof buildAnnualData>) {
   if (!annualData.length) return [];
-  let box = 100, cdi = 100, ibov = 100, poupanca = 100, inflacao = 100;
+  let box = SIMULATION_BASE, cdi = SIMULATION_BASE, ibov = SIMULATION_BASE, poupanca = SIMULATION_BASE, inflacao = SIMULATION_BASE;
   return annualData.map(d => {
     // Use real Box Capital return (boxReal) for the cumulative, not the client's individual return
     const br = d.boxReal ?? d.boxPct;
@@ -222,7 +223,7 @@ function CumulativeTooltip({ active, payload, label }: any) {
           <span className="font-bold text-red-400 tabular">-{fmtBRL(d.withdrawal)}</span>
         </div>
       )}
-      <p className="text-[10px] text-muted-foreground/50 pt-1 border-t border-white/5 mt-1">Base: R$100 investidos no início</p>
+      <p className="text-[10px] text-muted-foreground/50 pt-1 border-t border-white/5 mt-1">Base: R$1.000 investidos no início</p>
     </div>
   );
 }
@@ -268,6 +269,18 @@ export default function ClientDashboard({ user }: Props) {
 
   // Last year benchmark comparison
   const lastAnnual = annualData[annualData.length - 1];
+
+  // Real Box Capital accumulated return (compound from all years in history)
+  // Computed from BOX_CAPITAL_RETURNS for years the client has snapshots
+  const boxRealAccumPct = useMemo(() => {
+    if (!annualData.length) return null;
+    let acc = 1;
+    for (const d of annualData) {
+      const r = d.boxReal ?? d.boxPct;
+      acc *= (1 + r / 100);
+    }
+    return parseFloat(((acc - 1) * 100).toFixed(2));
+  }, [annualData]);
 
   // ── 2026 projection data ─────────────────────────────────
   const projectionData = useMemo(() => {
@@ -413,10 +426,10 @@ export default function ClientDashboard({ user }: Props) {
             {/* KPI row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiCard
-                label="Performance total"
-                value={fmtPct(gainPct)}
-                sub="desde o investimento inicial"
-                positive={gain >= 0}
+                label="Rentabilidade Box Capital"
+                value={boxRealAccumPct != null ? fmtPct(boxRealAccumPct) : fmtPct(gainPct)}
+                sub="acumulada no período (dados reais)"
+                positive={(boxRealAccumPct ?? gainPct) >= 0}
               />
               <KpiCard
                 label="Progresso da meta"
@@ -768,7 +781,7 @@ export default function ClientDashboard({ user }: Props) {
                       Rentabilidade Acumulada Total
                     </h3>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Quanto R$100 investidos no início valeriam hoje em cada ativo — dados reais Box Capital
+                      Quanto R$1.000 investidos no início valeriam hoje em cada ativo — dados reais Box Capital
                     </p>
                   </div>
 
@@ -782,9 +795,9 @@ export default function ClientDashboard({ user }: Props) {
                     ].map(b => b.value != null && (
                       <div key={b.label} className="rounded-xl p-3" style={{ background: b.bg, border: `1px solid ${b.color}22` }}>
                         <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: b.color }}>{b.label}</p>
-                        <p className="text-base font-bold text-white tabular mt-0.5">R${b.value?.toFixed(2)}</p>
+                        <p className="text-base font-bold text-white tabular mt-0.5">{fmtBRL(b.value ?? 0)}</p>
                         <p className="text-[10px] mt-0.5" style={{ color: b.color }}>
-                          {b.value != null ? fmtPct(b.value - 100) : ""}
+                          {b.value != null ? fmtPct(b.value - SIMULATION_BASE) : ""}
                         </p>
                       </div>
                     ))}
@@ -879,7 +892,7 @@ export default function ClientDashboard({ user }: Props) {
                     </LineChart>
                   </ResponsiveContainer>
                   <p className="text-[10px] text-muted-foreground/50 mt-3 text-center">
-                    Baseado nos retornos reais da Box Capital (sócio com sorteio) desde o início do investimento do cliente.
+                    Simulação com R$1.000 investidos no primeiro ano registrado. Dados reais Box Capital (sócio com sorteio).
                   </p>
                 </div>
               );
