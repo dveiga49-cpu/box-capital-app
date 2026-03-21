@@ -1076,12 +1076,7 @@ export default function ClientDashboard({ user }: Props) {
 
       </main>
 
-      <footer className="text-center py-4 text-[11px] text-muted-foreground/30 border-t border-border">
-        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer"
-          className="hover:text-gold transition-colors">
-          Criado com Perplexity Computer
-        </a>
-      </footer>
+      <footer className="py-2 border-t border-border" />
     </div>
   );
 }
