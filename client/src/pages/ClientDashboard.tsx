@@ -127,8 +127,12 @@ export default function ClientDashboard({ user }: Props) {
   });
 
   const logoutMutation = useMutation({
-    mutationFn: () => fetch("/api/auth/logout", { method: "POST" }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/auth/me"] }); nav("/login"); },
+    mutationFn: () => fetch("/api/auth/logout", { method: "POST" }),
+    onSuccess: () => {
+      qc.setQueryData(["/api/auth/me"], null);
+      qc.clear();
+      nav("/login");
+    },
   });
 
   const assets = data?.assets ?? [];
@@ -181,11 +185,6 @@ export default function ClientDashboard({ user }: Props) {
       {/* ── Topbar ── */}
       <header className="sticky top-0 z-20 border-b border-border bg-[#0d0f14]/95 backdrop-blur px-4 md:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <svg className="w-7 h-7 flex-shrink-0" viewBox="0 0 48 48" fill="none">
-            <rect x="4" y="4" width="40" height="40" rx="2" stroke="#C9A84C" strokeWidth="2" fill="none"/>
-            <path d="M14 14 L34 14 L34 34 L14 34 Z" stroke="#C9A84C" strokeWidth="1.5" fill="none"/>
-            <path d="M4 4 L14 14M34 14 L44 4M14 34 L4 44M34 34 L44 44" stroke="#C9A84C" strokeWidth="1.5"/>
-          </svg>
           <div className="leading-tight">
             <p className="text-[11px] text-muted-foreground">
               {greeting()}, <span className="text-gold font-bold">{user.name.split(" ")[0]}</span>
