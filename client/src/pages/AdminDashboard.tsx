@@ -62,8 +62,12 @@ export default function AdminDashboard({ user }: Props) {
 
   // ── Mutations ────────────────────────────────────────────────
   const logout = useMutation({
-    mutationFn: () => fetch("/api/auth/logout", { method: "POST" }).then(r => r.json()),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/auth/me"] }); nav("/login"); },
+    mutationFn: () => fetch("/api/auth/logout", { method: "POST" }),
+    onSuccess: () => {
+      qc.setQueryData(["/api/auth/me"], null);
+      qc.clear();
+      nav("/login");
+    },
   });
 
   const deleteClientMut = useMutation({
