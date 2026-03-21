@@ -307,6 +307,43 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  // ── CLIENT — self-service profile + goal ─────────────────────
+  // Update own name
+  app.patch("/api/client/profile", requireAuth, async (req, res) => {
+    const userId = req.session.userId!;
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: "Nome inválido" });
+    const updated = await storage.updateUser(userId, { name: name.trim() } as any);
+    res.json({ id: updated.id, name: updated.name, email: updated.email });
+  });
+
+  // Change own password
+  app.patch("/api/client/password", requireAuth, async (req, res) => {
+    const userId = req.session.userId!;
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || newPassword.length < 6)
+      return res.status(400).json({ error: "Senha mínima de 6 caracteres" });
+    const user = await storage.getUserById(userId);
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+    const ok = bcrypt.compareSync(currentPassword, user.password);
+    if (!ok) return res.status(401).json({ error: "Senha atual incorreta" });
+    const hash = bcrypt.hashSync(newPassword, 10);
+    await storage.updateUser(userId, { password: hash } as any);
+    res.json({ ok: true });
+  });
+
+  // Update own portfolio goal
+  app.patch("/api/client/goal", requireAuth, async (req, res) => {
+    const userId = req.session.userId!;
+    const { goal } = req.body;
+    const goalNum = parseFloat(goal);
+    if (isNaN(goalNum) || goalNum <= 0) return res.status(400).json({ error: "Meta inválida" });
+    const portfolio = await storage.getPortfolioByUserId(userId);
+    if (!portfolio) return res.status(404).json({ error: "Portfólio não encontrado" });
+    const updated = await storage.updatePortfolio(portfolio.id, { goal: goalNum });
+    res.json(updated);
+  });
+
   // ── SNAPSHOTS (admin only) ─────────────────────────────
   app.post("/api/portfolio/:portfolioId/snapshots", requireAdmin, async (req, res) => {
     const portfolioId = parseInt(req.params.portfolioId);
