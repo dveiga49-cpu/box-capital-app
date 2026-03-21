@@ -11,6 +11,26 @@ interface Asset { id: number; name: string; symbol: string; quantity: number; av
 interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; updatedAt: string; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
 
+// ── Box Capital historical returns (real data — sócio com sorteio) ────────────
+// Source: official Box Capital performance table
+const BOX_CAPITAL_RETURNS: Record<string, { box: number; cdi: number; ibov: number; poupanca: number; inflacao: number }> = {
+  "2011": { box: 16.70, cdi: 11.59, ibov: -18.00, poupanca: 7.50, inflacao: 6.50 },
+  "2012": { box: 14.90, cdi:  8.40, ibov:   7.40, poupanca: 6.47, inflacao: 5.84 },
+  "2013": { box: 12.80, cdi:  8.06, ibov: -15.50, poupanca: 6.37, inflacao: 5.91 },
+  "2014": { box: 15.35, cdi: 10.81, ibov:  -2.90, poupanca: 7.16, inflacao: 6.41 },
+  "2015": { box: 14.30, cdi: 13.24, ibov: -11.36, poupanca: 8.15, inflacao: 10.67 },
+  "2016": { box: 15.60, cdi: 14.00, ibov:  38.93, poupanca: 8.30, inflacao: 6.29 },
+  "2017": { box: 17.20, cdi:  9.93, ibov:  26.90, poupanca: 6.61, inflacao: 2.95 },
+  "2018": { box: 18.40, cdi:  6.42, ibov:  15.00, poupanca: 4.62, inflacao: 3.75 },
+  "2019": { box: 24.70, cdi:  5.96, ibov:  31.60, poupanca: 4.26, inflacao: 4.31 },
+  "2020": { box: 27.90, cdi:  2.76, ibov:   2.90, poupanca: 2.11, inflacao: 4.52 },
+  "2021": { box: 27.10, cdi:  4.21, ibov: -11.93, poupanca: 2.98, inflacao: 10.06 },
+  "2022": { box: 27.30, cdi: 13.15, ibov:  -5.74, poupanca: 5.75, inflacao: 5.78 },
+  "2023": { box: 41.50, cdi: 11.58, ibov:  17.29, poupanca: 8.26, inflacao: 3.75 },
+  "2024": { box: 144.00, cdi: 11.25, ibov: -3.70, poupanca: 6.17, inflacao: 4.76 },
+  "2025": { box: 55.00, cdi: 15.00, ibov:  29.35, poupanca: 8.04, inflacao: 4.68 },
+};
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 function greeting() {
   const h = new Date().getHours();
@@ -45,26 +65,27 @@ function buildAnnualData(snapshots: Snapshot[], initialValue: number) {
   const annual = years.map(yr => {
     const snaps = byYear[yr].sort((a, b) => a.month.localeCompare(b.month));
     const last = snaps[snaps.length - 1];
-    // Sum all withdrawals in the year
     const totalWithdrawal = snaps.reduce((sum, s) => sum + (s.withdrawal ?? 0), 0);
     return { year: yr, snap: last, totalWithdrawal };
   });
 
-  // Compute % growth vs. the previous year (or initial value for first year)
-  // For years with withdrawals: adjust previous value to account for the withdrawal
   return annual.map((d, i) => {
     const prevValue = i === 0 ? initialValue : annual[i - 1].snap.value;
-    // If there was a withdrawal, the "real" growth is from prevValue to (currentValue + withdrawal)
-    // so we add withdrawal back to show what growth would have been without it
     const effectiveValue = d.snap.value + d.totalWithdrawal;
     const boxPct = prevValue > 0 ? ((effectiveValue - prevValue) / prevValue) * 100 : 0;
+    // Use real Box Capital historical data for benchmark comparisons
+    const real = BOX_CAPITAL_RETURNS[d.year];
     return {
       year: d.year,
       patrimonio: d.snap.value,
       boxPct: parseFloat(boxPct.toFixed(2)),
-      cdi: d.snap.cdi ?? null,
-      ibov: d.snap.ibov ?? null,
+      // Real benchmark data from official Box Capital table
+      boxReal: real?.box ?? null,
+      cdi: real?.cdi ?? d.snap.cdi ?? null,
+      ibov: real?.ibov ?? d.snap.ibov ?? null,
       dolar: d.snap.dolar ?? null,
+      poupanca: real?.poupanca ?? null,
+      inflacao: real?.inflacao ?? null,
       withdrawal: d.totalWithdrawal > 0 ? d.totalWithdrawal : null,
     };
   });
@@ -75,7 +96,7 @@ function BenchmarkTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   return (
-    <div className="bg-[#1a1c24] border border-[rgba(201,168,76,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs space-y-1.5 min-w-[170px]">
+    <div className="bg-[#1a1c24] border border-[rgba(201,168,76,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs space-y-1.5 min-w-[190px]">
       <p className="text-gold font-bold text-sm mb-2">{label}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center justify-between gap-4">
@@ -151,20 +172,25 @@ function KpiCard({ label, value, sub, positive }: { label: string; value: string
 }
 
 // Build cumulative index: simulates R$100 invested from the first year growing year by year
+// Uses real Box Capital historical data (sócio com sorteio)
 function buildCumulativeData(annualData: ReturnType<typeof buildAnnualData>) {
   if (!annualData.length) return [];
-  let box = 100, cdi = 100, ibov = 100, dolar = 100;
+  let box = 100, cdi = 100, ibov = 100, poupanca = 100, inflacao = 100;
   return annualData.map(d => {
-    box  = box  * (1 + d.boxPct / 100);
-    cdi  = d.cdi  != null ? cdi  * (1 + d.cdi  / 100) : cdi;
-    ibov = d.ibov != null ? ibov * (1 + d.ibov / 100) : ibov;
-    dolar= d.dolar!= null ? dolar* (1 + d.dolar/ 100) : dolar;
+    // Use real Box Capital return (boxReal) for the cumulative, not the client's individual return
+    const br = d.boxReal ?? d.boxPct;
+    box      = box      * (1 + br            / 100);
+    cdi      = d.cdi      != null ? cdi      * (1 + d.cdi      / 100) : cdi;
+    ibov     = d.ibov     != null ? ibov     * (1 + d.ibov     / 100) : ibov;
+    poupanca = d.poupanca != null ? poupanca * (1 + d.poupanca / 100) : poupanca;
+    inflacao = d.inflacao != null ? inflacao * (1 + d.inflacao / 100) : inflacao;
     return {
-      year: d.year,
-      box:  parseFloat(box.toFixed(2)),
-      cdi:  d.cdi  != null ? parseFloat(cdi.toFixed(2))  : null,
-      ibov: d.ibov != null ? parseFloat(ibov.toFixed(2)) : null,
-      dolar:d.dolar!= null ? parseFloat(dolar.toFixed(2)): null,
+      year:     d.year,
+      box:      parseFloat(box.toFixed(2)),
+      cdi:      d.cdi      != null ? parseFloat(cdi.toFixed(2))      : null,
+      ibov:     d.ibov     != null ? parseFloat(ibov.toFixed(2))     : null,
+      poupanca: d.poupanca != null ? parseFloat(poupanca.toFixed(2)) : null,
+      inflacao: d.inflacao != null ? parseFloat(inflacao.toFixed(2)) : null,
       withdrawal: d.withdrawal,
     };
   });
@@ -577,9 +603,9 @@ export default function ClientDashboard({ user }: Props) {
                 </p>
               </div>
 
-              {annualData.length > 0 && annualData.some(d => d.cdi != null || d.ibov != null || d.dolar != null) ? (
+              {annualData.length > 0 ? (
                 <>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={320}>
                     <LineChart data={annualData} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis
@@ -593,7 +619,7 @@ export default function ClientDashboard({ user }: Props) {
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={v => v + "%"}
-                        width={44}
+                        width={50}
                       />
                       <Tooltip content={<BenchmarkTooltip />} cursor={{ stroke: "rgba(255,255,255,0.06)", strokeWidth: 1 }} />
                       <Legend
@@ -602,7 +628,6 @@ export default function ClientDashboard({ user }: Props) {
                         iconSize={8}
                       />
                       <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
-                      {/* Vertical markers for years with withdrawals */}
                       {annualData.filter(d => d.withdrawal).map(d => (
                         <ReferenceLine
                           key={d.year}
@@ -613,9 +638,10 @@ export default function ClientDashboard({ user }: Props) {
                           label={{ value: `\u2193saque`, position: "insideTopRight", fill: "#ef4444", fontSize: 9 }}
                         />
                       ))}
+                      {/* Box Capital real historical return */}
                       <Line
                         type="monotone"
-                        dataKey="boxPct"
+                        dataKey="boxReal"
                         name="Box Capital"
                         stroke="#C9A84C"
                         strokeWidth={3}
@@ -647,13 +673,24 @@ export default function ClientDashboard({ user }: Props) {
                       />
                       <Line
                         type="monotone"
-                        dataKey="dolar"
-                        name="Dólar"
-                        stroke="#f97316"
+                        dataKey="poupanca"
+                        name="Poupança"
+                        stroke="#a78bfa"
                         strokeWidth={2}
                         strokeDasharray="5 3"
-                        dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
+                        dot={{ fill: "#a78bfa", r: 4, strokeWidth: 0 }}
                         activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="inflacao"
+                        name="Inflação"
+                        stroke="#fb7185"
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                        dot={{ fill: "#fb7185", r: 3, strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
                         connectNulls
                       />
                     </LineChart>
@@ -664,7 +701,7 @@ export default function ClientDashboard({ user }: Props) {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-white/5">
-                          {["Ano", "Box Capital", "CDI", "IBOVESPA", "Dólar", "vs CDI", "Saque"].map(h => (
+                          {["Ano", "Box Capital", "CDI", "IBOVESPA", "Poupança", "Inflação", "vs CDI", "Saque"].map(h => (
                             <th key={h} className="text-left py-2.5 px-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold first:pl-0">
                               {h}
                             </th>
@@ -673,7 +710,8 @@ export default function ClientDashboard({ user }: Props) {
                       </thead>
                       <tbody>
                         {annualData.map((d, i) => {
-                          const vsCdi = d.cdi != null ? d.boxPct - d.cdi : null;
+                          const boxVal = d.boxReal ?? d.boxPct;
+                          const vsCdi = d.cdi != null ? boxVal - d.cdi : null;
                           return (
                             <tr
                               key={d.year}
@@ -681,13 +719,14 @@ export default function ClientDashboard({ user }: Props) {
                             >
                               <td className="py-3 px-3 font-bold text-white first:pl-0">{d.year}</td>
                               <td className="py-3 px-3">
-                                <span className={`font-bold ${d.boxPct >= 0 ? "text-gold" : "text-red-400"}`}>
-                                  {fmtPct(d.boxPct)}
+                                <span className={`font-bold ${boxVal >= 0 ? "text-gold" : "text-red-400"}`}>
+                                  {fmtPct(boxVal)}
                                 </span>
                               </td>
                               <td className="py-3 px-3 text-green-400">{d.cdi != null ? fmtPct(d.cdi) : <span className="text-muted-foreground">—</span>}</td>
                               <td className="py-3 px-3 text-blue-400">{d.ibov != null ? fmtPct(d.ibov) : <span className="text-muted-foreground">—</span>}</td>
-                              <td className="py-3 px-3 text-orange-400">{d.dolar != null ? fmtPct(d.dolar) : <span className="text-muted-foreground">—</span>}</td>
+                              <td className="py-3 px-3 text-violet-400">{d.poupanca != null ? fmtPct(d.poupanca) : <span className="text-muted-foreground">—</span>}</td>
+                              <td className="py-3 px-3 text-rose-400">{d.inflacao != null ? fmtPct(d.inflacao) : <span className="text-muted-foreground">—</span>}</td>
                               <td className="py-3 px-3">
                                 {vsCdi != null ? (
                                   <span className={`font-semibold ${vsCdi >= 0 ? "text-green-400" : "text-red-400"}`}>
@@ -707,33 +746,6 @@ export default function ClientDashboard({ user }: Props) {
                     </table>
                   </div>
                 </>
-              ) : annualData.length > 0 ? (
-                // Has snapshots but no benchmark data yet
-                <div className="space-y-3">
-                  <div className="h-[280px] flex flex-col items-center justify-center text-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="1.5"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">Benchmarks em breve</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Os dados de CDI, IBOVESPA e Dólar serão adicionados<br />pelo seu gestor em cada atualização anual.
-                      </p>
-                    </div>
-                  </div>
-                  {/* Show box capital only chart */}
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={annualData} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                      <XAxis dataKey="year" tick={{ fill: "#6b7280", fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: "#6b7280", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v + "%"} width={44} />
-                      <Tooltip content={<BenchmarkTooltip />} />
-                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
-                      <Line type="monotone" dataKey="boxPct" name="Box Capital" stroke="#C9A84C" strokeWidth={3}
-                        dot={{ fill: "#C9A84C", r: 5, strokeWidth: 0 }} activeDot={{ r: 7, fill: "#C9A84C", stroke: "#0d0f14", strokeWidth: 2 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
               ) : (
                 <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
                   Histórico em construção...
@@ -742,7 +754,7 @@ export default function ClientDashboard({ user }: Props) {
             </div>
 
             {/* ── Cumulative total chart ── */}
-            {annualData.length > 1 && annualData.some(d => d.cdi != null || d.ibov != null || d.dolar != null) && (() => {
+            {annualData.length > 1 && (() => {
               const cumData = buildCumulativeData(annualData);
               const lastCum = cumData[cumData.length - 1];
               return (
@@ -756,17 +768,17 @@ export default function ClientDashboard({ user }: Props) {
                       Rentabilidade Acumulada Total
                     </h3>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Quanto R$100 investidos no início valeriam hoje em cada ativo
+                      Quanto R$100 investidos no início valeriam hoje em cada ativo — dados reais Box Capital
                     </p>
                   </div>
 
                   {/* Summary badges */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
                     {[
-                      { label: "Box Capital", value: lastCum?.box,  color: "#C9A84C",  bg: "rgba(201,168,76,0.08)" },
-                      { label: "CDI",         value: lastCum?.cdi,  color: "#3fcf8e",  bg: "rgba(63,207,142,0.08)" },
-                      { label: "IBOVESPA",    value: lastCum?.ibov, color: "#60a5fa",  bg: "rgba(96,165,250,0.08)" },
-                      { label: "Dólar",       value: lastCum?.dolar,color: "#f97316",  bg: "rgba(249,115,22,0.08)" },
+                      { label: "Box Capital",  value: lastCum?.box,       color: "#C9A84C", bg: "rgba(201,168,76,0.08)" },
+                      { label: "CDI",          value: lastCum?.cdi,       color: "#3fcf8e", bg: "rgba(63,207,142,0.08)" },
+                      { label: "IBOVESPA",     value: lastCum?.ibov,      color: "#60a5fa", bg: "rgba(96,165,250,0.08)" },
+                      { label: "Poupança",     value: lastCum?.poupanca,  color: "#a78bfa", bg: "rgba(167,139,250,0.08)" },
                     ].map(b => b.value != null && (
                       <div key={b.label} className="rounded-xl p-3" style={{ background: b.bg, border: `1px solid ${b.color}22` }}>
                         <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: b.color }}>{b.label}</p>
@@ -778,7 +790,7 @@ export default function ClientDashboard({ user }: Props) {
                     ))}
                   </div>
 
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={cumData} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis
@@ -792,7 +804,7 @@ export default function ClientDashboard({ user }: Props) {
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={v => `R$${v}`}
-                        width={54}
+                        width={60}
                       />
                       <Tooltip content={<CumulativeTooltip />} cursor={{ stroke: "rgba(255,255,255,0.06)", strokeWidth: 1 }} />
                       <Legend
@@ -800,7 +812,6 @@ export default function ClientDashboard({ user }: Props) {
                         iconType="circle"
                         iconSize={8}
                       />
-                      {/* Withdrawal markers */}
                       {cumData.filter(d => d.withdrawal).map(d => (
                         <ReferenceLine
                           key={d.year}
@@ -845,19 +856,30 @@ export default function ClientDashboard({ user }: Props) {
                       />
                       <Line
                         type="monotone"
-                        dataKey="dolar"
-                        name="Dólar"
-                        stroke="#f97316"
+                        dataKey="poupanca"
+                        name="Poupança"
+                        stroke="#a78bfa"
                         strokeWidth={2}
                         strokeDasharray="5 3"
-                        dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
+                        dot={{ fill: "#a78bfa", r: 4, strokeWidth: 0 }}
                         activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="inflacao"
+                        name="Inflação"
+                        stroke="#fb7185"
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                        dot={{ fill: "#fb7185", r: 3, strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
                         connectNulls
                       />
                     </LineChart>
                   </ResponsiveContainer>
                   <p className="text-[10px] text-muted-foreground/50 mt-3 text-center">
-                    Simulação com base nos retornos anuais registrados. Box Capital ajustado para saques (mostra crescimento real do patrimônio).
+                    Baseado nos retornos reais da Box Capital (sócio com sorteio) desde o início do investimento do cliente.
                   </p>
                 </div>
               );
@@ -865,14 +887,15 @@ export default function ClientDashboard({ user }: Props) {
 
             {/* Legend explanation */}
             <div
-              className="rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3"
+              className="rounded-xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3"
               style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.08)" }}
             >
               {[
-                { color: "#C9A84C", label: "Box Capital", desc: "Seu patrimônio gerido" },
-                { color: "#3fcf8e", label: "CDI", desc: "Taxa referência renda fixa" },
-                { color: "#60a5fa", label: "IBOVESPA", desc: "Índice da bolsa brasileira" },
-                { color: "#f97316", label: "Dólar", desc: "Variação USD/BRL no ano" },
+                { color: "#C9A84C", label: "Box Capital", desc: "Retorno real histórico (sócio)" },
+                { color: "#3fcf8e", label: "CDI",         desc: "Taxa referência renda fixa" },
+                { color: "#60a5fa", label: "IBOVESPA",    desc: "Índice da bolsa brasileira" },
+                { color: "#a78bfa", label: "Poupança",    desc: "Caderneta de poupança" },
+                { color: "#fb7185", label: "Inflação",    desc: "IPCA anual" },
               ].map(b => (
                 <div key={b.label} className="flex items-start gap-2.5">
                   <div className="w-2.5 h-2.5 rounded-full mt-0.5 flex-shrink-0" style={{ background: b.color }} />
