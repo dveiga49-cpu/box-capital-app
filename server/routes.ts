@@ -1,8 +1,18 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+
+const PgSession = connectPgSimple(session);
+const sessionPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes("railway") || process.env.DATABASE_URL?.includes("neon")
+    ? { rejectUnauthorized: false }
+    : false,
+});
 
 declare module "express-session" {
   interface SessionData { userId: number; role: string; }
@@ -24,6 +34,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.set("trust proxy", 1);
 
   app.use(session({
+    store: new PgSession({
+      pool: sessionPool,
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+    }),
     secret: process.env.SESSION_SECRET || "box-capital-secret-2026",
     resave: false,
     saveUninitialized: false,
@@ -31,7 +46,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       httpOnly: true,
       sameSite: "none",
       secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 dias
     },
   }));
 
