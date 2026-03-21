@@ -329,14 +329,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
       }
     }
 
-    const data = { ...body, portfolioId, cdi, ibov, dolar };
+    const data = { ...body, portfolioId, cdi, ibov, dolar, withdrawal: body.withdrawal ?? 0 };
     const snap = await storage.upsertSnapshot(data);
     res.json(snap);
   });
 
   app.patch("/api/snapshots/:id", requireAdmin, async (req, res) => {
-    const { month, value, cdi, ibov, dolar } = req.body;
-    const snap = await storage.updateSnapshot(parseInt(req.params.id), { month, value, cdi, ibov, dolar });
+    const { month, value, cdi, ibov, dolar, withdrawal } = req.body;
+    const snap = await storage.updateSnapshot(parseInt(req.params.id), { month, value, cdi, ibov, dolar, withdrawal: withdrawal ?? 0 } as any);
     res.json(snap);
   });
 
