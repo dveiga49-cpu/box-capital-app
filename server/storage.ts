@@ -10,6 +10,9 @@ const pool = new Pool({
   ssl: needsSsl ? { rejectUnauthorized: false } : false,
 });
 
+// Export pool so routes.ts can reuse it for session store
+export function getPool() { return pool; }
+
 // ── Create tables + migrate ────────────────────────────────
 async function initDb() {
   await pool.query(`
