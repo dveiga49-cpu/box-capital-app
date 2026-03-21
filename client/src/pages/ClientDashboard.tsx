@@ -150,6 +150,57 @@ function KpiCard({ label, value, sub, positive }: { label: string; value: string
   );
 }
 
+// Build cumulative index: simulates R$100 invested from the first year growing year by year
+function buildCumulativeData(annualData: ReturnType<typeof buildAnnualData>) {
+  if (!annualData.length) return [];
+  let box = 100, cdi = 100, ibov = 100, dolar = 100;
+  return annualData.map(d => {
+    box  = box  * (1 + d.boxPct / 100);
+    cdi  = d.cdi  != null ? cdi  * (1 + d.cdi  / 100) : cdi;
+    ibov = d.ibov != null ? ibov * (1 + d.ibov / 100) : ibov;
+    dolar= d.dolar!= null ? dolar* (1 + d.dolar/ 100) : dolar;
+    return {
+      year: d.year,
+      box:  parseFloat(box.toFixed(2)),
+      cdi:  d.cdi  != null ? parseFloat(cdi.toFixed(2))  : null,
+      ibov: d.ibov != null ? parseFloat(ibov.toFixed(2)) : null,
+      dolar:d.dolar!= null ? parseFloat(dolar.toFixed(2)): null,
+      withdrawal: d.withdrawal,
+    };
+  });
+}
+
+// Custom tooltip for cumulative chart
+function CumulativeTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  return (
+    <div className="bg-[#1a1c24] border border-[rgba(201,168,76,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs space-y-1.5 min-w-[190px]">
+      <p className="text-gold font-bold text-sm mb-2">{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full inline-block" style={{ background: p.color }} />
+            <span className="text-muted-foreground">{p.name}</span>
+          </span>
+          <span className="font-semibold tabular" style={{ color: p.color }}>
+            {p.value != null ? `R$${p.value.toFixed(2)}` : "—"}
+          </span>
+        </div>
+      ))}
+      {d?.withdrawal > 0 && (
+        <div className="flex items-center justify-between gap-4 pt-1.5 mt-0.5 border-t border-white/5">
+          <span className="text-red-400 flex items-center gap-1">
+            <span className="text-[9px]">&#9660;</span> Saque
+          </span>
+          <span className="font-bold text-red-400 tabular">-{fmtBRL(d.withdrawal)}</span>
+        </div>
+      )}
+      <p className="text-[10px] text-muted-foreground/50 pt-1 border-t border-white/5 mt-1">Base: R$100 investidos no início</p>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function ClientDashboard({ user }: Props) {
   const [, nav] = useLocation();
@@ -689,6 +740,128 @@ export default function ClientDashboard({ user }: Props) {
                 </div>
               )}
             </div>
+
+            {/* ── Cumulative total chart ── */}
+            {annualData.length > 1 && annualData.some(d => d.cdi != null || d.ibov != null || d.dolar != null) && (() => {
+              const cumData = buildCumulativeData(annualData);
+              const lastCum = cumData[cumData.length - 1];
+              return (
+                <div
+                  className="rounded-2xl p-5"
+                  style={{ background: "#131620", border: "1px solid rgba(201,168,76,0.12)" }}
+                >
+                  <div className="mb-5">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2"><path d="M2 12h20M12 2l10 10-10 10"/></svg>
+                      Rentabilidade Acumulada Total
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Quanto R$100 investidos no início valeriam hoje em cada ativo
+                    </p>
+                  </div>
+
+                  {/* Summary badges */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+                    {[
+                      { label: "Box Capital", value: lastCum?.box,  color: "#C9A84C",  bg: "rgba(201,168,76,0.08)" },
+                      { label: "CDI",         value: lastCum?.cdi,  color: "#3fcf8e",  bg: "rgba(63,207,142,0.08)" },
+                      { label: "IBOVESPA",    value: lastCum?.ibov, color: "#60a5fa",  bg: "rgba(96,165,250,0.08)" },
+                      { label: "Dólar",       value: lastCum?.dolar,color: "#f97316",  bg: "rgba(249,115,22,0.08)" },
+                    ].map(b => b.value != null && (
+                      <div key={b.label} className="rounded-xl p-3" style={{ background: b.bg, border: `1px solid ${b.color}22` }}>
+                        <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: b.color }}>{b.label}</p>
+                        <p className="text-base font-bold text-white tabular mt-0.5">R${b.value?.toFixed(2)}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: b.color }}>
+                          {b.value != null ? fmtPct(b.value - 100) : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={cumData} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                      <XAxis
+                        dataKey="year"
+                        tick={{ fill: "#6b7280", fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fill: "#6b7280", fontSize: 10 }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={v => `R$${v}`}
+                        width={54}
+                      />
+                      <Tooltip content={<CumulativeTooltip />} cursor={{ stroke: "rgba(255,255,255,0.06)", strokeWidth: 1 }} />
+                      <Legend
+                        wrapperStyle={{ fontSize: 11, paddingTop: 16, color: "#9ca3af" }}
+                        iconType="circle"
+                        iconSize={8}
+                      />
+                      {/* Withdrawal markers */}
+                      {cumData.filter(d => d.withdrawal).map(d => (
+                        <ReferenceLine
+                          key={d.year}
+                          x={d.year}
+                          stroke="#ef4444"
+                          strokeWidth={1.5}
+                          strokeDasharray="3 3"
+                          label={{ value: `\u2193saque`, position: "insideTopRight", fill: "#ef4444", fontSize: 9 }}
+                        />
+                      ))}
+                      <Line
+                        type="monotone"
+                        dataKey="box"
+                        name="Box Capital"
+                        stroke="#C9A84C"
+                        strokeWidth={3}
+                        dot={{ fill: "#C9A84C", r: 5, strokeWidth: 0 }}
+                        activeDot={{ r: 7, fill: "#C9A84C", stroke: "#0d0f14", strokeWidth: 2 }}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cdi"
+                        name="CDI"
+                        stroke="#3fcf8e"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        dot={{ fill: "#3fcf8e", r: 4, strokeWidth: 0 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="ibov"
+                        name="IBOVESPA"
+                        stroke="#60a5fa"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        dot={{ fill: "#60a5fa", r: 4, strokeWidth: 0 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="dolar"
+                        name="Dólar"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <p className="text-[10px] text-muted-foreground/50 mt-3 text-center">
+                    Simulação com base nos retornos anuais registrados. Box Capital ajustado para saques (mostra crescimento real do patrimônio).
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Legend explanation */}
             <div
