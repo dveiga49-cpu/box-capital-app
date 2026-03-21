@@ -44,17 +44,26 @@ export default function LoginPage() {
       <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[500px] h-[500px] pointer-events-none"
         style={{ background: "radial-gradient(ellipse, rgba(201,168,76,0.07) 0%, transparent 65%)" }} />
 
-      <div className="fade-up w-full max-w-sm bg-card border rounded-2xl p-10 shadow-2xl"
+      <div className="fade-up w-full max-w-md mx-4 bg-card border rounded-2xl shadow-2xl"
         style={{ borderColor: "rgba(201,168,76,0.18)" }}>
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
+
+        {/* Logo — fundo integrado ao card, sem borda abrupta */}
+        <div className="flex items-center justify-center pt-10 pb-6 px-10">
           <img
             src={logoUrl}
             alt="Box Capital Strategy"
-            className="w-64 object-contain"
-            style={{ filter: "drop-shadow(0 0 16px rgba(201,168,76,0.2))" }}
+            className="w-72 object-contain rounded-xl"
+            style={{
+              mixBlendMode: "lighten",
+              filter: "drop-shadow(0 0 18px rgba(201,168,76,0.25))",
+            }}
           />
         </div>
+
+        {/* Divisor dourado sutil */}
+        <div className="mx-10 mb-8 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(201,168,76,0.35), transparent)" }} />
+
+        <div className="px-10 pb-10">
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Email */}
@@ -110,6 +119,7 @@ export default function LoginPage() {
         <p className="text-center text-xs text-muted-foreground mt-6">
           © 2026 Box Capital Strategy. Todos os direitos reservados.
         </p>
+        </div> {/* /px-10 pb-10 */}
       </div>
     </div>
   );
