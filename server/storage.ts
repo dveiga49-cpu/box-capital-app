@@ -3,11 +3,11 @@ import bcrypt from "bcryptjs";
 import type { User, InsertUser, Portfolio, InsertPortfolio, Asset, InsertAsset, Snapshot, InsertSnapshot } from "@shared/schema";
 
 // ── PostgreSQL connection ──────────────────────────────────
+const dbUrl = process.env.DATABASE_URL || "";
+const needsSsl = dbUrl.includes("neon.tech") || dbUrl.includes("supabase") || dbUrl.includes("amazonaws");
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("railway") || process.env.DATABASE_URL?.includes("neon")
-    ? { rejectUnauthorized: false }
-    : false,
+  connectionString: dbUrl,
+  ssl: needsSsl ? { rejectUnauthorized: false } : false,
 });
 
 // ── Create tables + migrate ────────────────────────────────
