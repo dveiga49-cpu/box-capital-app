@@ -100,7 +100,7 @@ function mapUser(r: any): User {
   return { id: r.id, name: r.name, email: r.email, password: r.password, role: r.role, phone: r.phone ?? null, active: r.active, createdAt: r.created_at };
 }
 function mapPortfolio(r: any): Portfolio {
-  return { id: r.id, userId: r.user_id, initialValue: parseFloat(r.initial_value), goal: parseFloat(r.goal), note: r.note ?? null, projectionRate: r.projection_rate ?? 1, updatedAt: r.updated_at };
+  return { id: r.id, userId: r.user_id, initialValue: parseFloat(r.initial_value), goal: parseFloat(r.goal), note: r.note ?? null, projectionRate: r.projection_rate ?? 1, customReturnPct: r.custom_return_pct != null ? parseFloat(r.custom_return_pct) : null, updatedAt: r.updated_at };
 }
 function mapAsset(r: any): Asset {
   return { id: r.id, portfolioId: r.portfolio_id, name: r.name, symbol: r.symbol, quantity: parseFloat(r.quantity), avgPrice: parseFloat(r.avg_price), currentPrice: parseFloat(r.current_price), color: r.color };
