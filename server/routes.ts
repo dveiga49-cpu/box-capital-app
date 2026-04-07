@@ -307,6 +307,20 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
+  // ── ADMIN — change own password ─────────────────────
+  app.patch("/api/admin/password", requireAdmin, async (req, res) => {
+    const userId = req.session.userId!;
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || newPassword.length < 6)
+      return res.status(400).json({ error: "Senha mínima de 6 caracteres" });
+    const user = await storage.getUserById(userId);
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+    const ok = bcrypt.compareSync(currentPassword, user.password);
+    if (!ok) return res.status(401).json({ error: "Senha atual incorreta" });
+    await storage.updateUser(userId, { password: newPassword } as any);
+    res.json({ ok: true });
+  });
+
   // ── CLIENT — self-service profile + goal ─────────────────────
   // Update own name
   app.patch("/api/client/profile", requireAuth, async (req, res) => {
