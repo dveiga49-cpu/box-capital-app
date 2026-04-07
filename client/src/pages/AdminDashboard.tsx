@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 interface Props { user: { id: number; name: string; email: string; role: string }; }
 interface Client { id: number; name: string; email: string; phone: string | null; active: boolean; createdAt: string; }
 interface Asset { id: number; portfolioId: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
-interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; }
+interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
 interface PortfolioData { portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[]; }
 
@@ -569,15 +569,19 @@ function EditPortfolioModal({ portfolio, onClose, onSuccess }: { portfolio: Port
   const [goal, setGoal] = useState(String(portfolio.goal));
   const [note, setNote] = useState(portfolio.note ?? "");
   const [projectionRate, setProjectionRate] = useState(String(portfolio.projectionRate ?? 1));
+  const [customReturnPct, setCustomReturnPct] = useState(portfolio.customReturnPct != null ? String(portfolio.customReturnPct) : "");
   const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
     if (!initialValue || !goal) { setErr("Valor inicial e meta são obrigatórios."); return; }
     setLoading(true);
+    const body: any = { initialValue: parseFloat(initialValue), goal: parseFloat(goal), note, projectionRate: parseFloat(projectionRate) || 1 };
+    if (customReturnPct.trim() !== "") body.customReturnPct = parseFloat(customReturnPct);
+    else body.customReturnPct = null;
     const r = await fetch(`/api/portfolio/${portfolio.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initialValue: parseFloat(initialValue), goal: parseFloat(goal), note, projectionRate: parseFloat(projectionRate) || 1 })
+      body: JSON.stringify(body)
     });
     const d = await r.json(); setLoading(false);
     if (!r.ok) { setErr(d.error || "Erro."); return; }
@@ -600,6 +604,21 @@ function EditPortfolioModal({ portfolio, onClose, onSuccess }: { portfolio: Port
           <Field label="Taxa de crescimento mensal (% ao mês)" value={projectionRate} onChange={setProjectionRate} placeholder="1" type="number" />
           <p className="text-[10px] text-muted-foreground/60 mt-1.5">
             Equivale a ~{((Math.pow(1 + (parseFloat(projectionRate) || 1) / 100, 12) - 1) * 100).toFixed(1)}% ao ano. Cada cliente pode ter uma taxa diferente.
+          </p>
+        </div>
+        <div className="pt-2 border-t border-border">
+          <p className="text-[11px] text-muted-foreground mb-2 font-medium">Rentabilidade Total (Visão Geral)</p>
+          <Field
+            label="Valor manual % (deixe em branco para cálculo automático)"
+            value={customReturnPct}
+            onChange={setCustomReturnPct}
+            placeholder="Ex: 199"
+            type="number"
+          />
+          <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+            {customReturnPct.trim() !== ""
+              ? <span className="text-yellow-400 font-semibold">&#9888; Valor manual ativo: {customReturnPct}% será exibido para o cliente.</span>
+              : "Quando em branco, exibe o cálculo automático com base nos dados reais da Box Capital."}
           </p>
         </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
