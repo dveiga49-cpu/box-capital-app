@@ -38,6 +38,7 @@ export default function AdminDashboard({ user }: Props) {
   const [msgType, setMsgType] = useState<"success" | "error">("success");
 
   // Modal states
+  const [modalAdminPwd, setModalAdminPwd] = useState(false);
   const [modalAddClient, setModalAddClient] = useState(false);
   const [modalEditClient, setModalEditClient] = useState<Client | null>(null);
   const [modalEditPortfolio, setModalEditPortfolio] = useState(false);
@@ -110,6 +111,9 @@ export default function AdminDashboard({ user }: Props) {
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground hidden sm:block">{user.name}</span>
           <span className="text-[10px] bg-yellow-500/10 text-gold px-2 py-0.5 rounded-full font-semibold">ADMIN</span>
+          <button onClick={() => setModalAdminPwd(true)} className="text-muted-foreground hover:text-gold transition-colors p-1.5" title="Alterar minha senha">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </button>
           <button onClick={() => logout.mutate()} className="text-muted-foreground hover:text-red-400 transition-colors p-1.5" title="Sair">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
@@ -366,6 +370,9 @@ export default function AdminDashboard({ user }: Props) {
       <footer className="py-2 border-t border-border" />
 
       {/* ══ MODALS ══ */}
+
+      {/* Admin change password */}
+      {modalAdminPwd && <AdminPasswordModal onClose={() => setModalAdminPwd(false)} onSuccess={(m) => { showMsg(m); setModalAdminPwd(false); }} />}
 
       {/* Add client */}
       {modalAddClient && (
@@ -817,6 +824,63 @@ function EditSnapshotModal({ snapshot, onClose, onSuccess }: { snapshot: Snapsho
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60">
           {loading ? "Salvando..." : "Salvar Alterações"}
+        </button>
+      </form>
+    </ModalShell>
+  );
+}
+
+// ── Admin Password Modal ──────────────────────────────────────────────────────
+function AdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (m: string) => void }) {
+  const [curPwd, setCurPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [confPwd, setConfPwd] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    if (!curPwd || !newPwd || !confPwd) { setErr("Preencha todos os campos."); return; }
+    if (newPwd.length < 6) { setErr("Nova senha: mínimo 6 caracteres."); return; }
+    if (newPwd !== confPwd) { setErr("As senhas não coincidem."); return; }
+    setLoading(true);
+    try {
+      const r = await fetch("/api/admin/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: curPwd, newPassword: newPwd }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error ?? "Erro ao alterar senha."); return; }
+      onSuccess("Senha do administrador alterada com sucesso.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Alterar Minha Senha" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {[
+          { label: "Senha atual",          val: curPwd,  set: setCurPwd },
+          { label: "Nova senha",            val: newPwd,  set: setNewPwd },
+          { label: "Confirmar nova senha",  val: confPwd, set: setConfPwd },
+        ].map(f => (
+          <div key={f.label}>
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">{f.label}</label>
+            <input
+              type="password"
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-yellow-600/50 focus:ring-1 focus:ring-yellow-600/20"
+              value={f.val}
+              onChange={e => f.set(e.target.value)}
+              placeholder="••••••"
+            />
+          </div>
+        ))}
+        {err && <p className="text-xs text-red-400">{err}</p>}
+        <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-1 disabled:opacity-60">
+          {loading ? "Salvando..." : "Alterar Senha"}
         </button>
       </form>
     </ModalShell>
