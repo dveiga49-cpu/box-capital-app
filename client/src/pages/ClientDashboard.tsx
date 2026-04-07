@@ -55,9 +55,11 @@ function labelMonth(m: string) {
 // Sum all withdrawals within the year
 function buildAnnualData(snapshots: Snapshot[], initialValue: number) {
   if (!snapshots.length) return [];
+  const currentYear = String(new Date().getFullYear());
   const byYear: Record<string, Snapshot[]> = {};
   for (const s of snapshots) {
     const yr = s.month.slice(0, 4);
+    if (yr >= currentYear) continue; // exclude current year — no closed result yet
     if (!byYear[yr]) byYear[yr] = [];
     byYear[yr].push(s);
   }
@@ -282,7 +284,7 @@ export default function ClientDashboard({ user }: Props) {
   const gainPct = initialValue > 0 ? (gain / initialValue) * 100 : 0;
   const goalPct = goal > 0 ? Math.min((total / goal) * 100, 100) : 0;
 
-  // Annual data for charts (used in both Visão Geral and Comparativo)
+  // annualData: excludes current year — no closed result yet
   const annualData = useMemo(() => buildAnnualData(snapshots, initialValue), [snapshots, initialValue]);
 
   // Last year benchmark comparison
@@ -294,19 +296,16 @@ export default function ClientDashboard({ user }: Props) {
     setGoalInput(String(portfolio.goal ?? ""));
   }
 
-  // Real Box Capital accumulated return (compound from all years in history)
-  // Excludes the current year (2026+) since it has no closed result yet
-  const currentYear = String(new Date().getFullYear());
+  // Real Box Capital accumulated return — annualData already excludes current year
   const boxRealAccumPct = useMemo(() => {
     if (!annualData.length) return null;
     let acc = 1;
     for (const d of annualData) {
-      if (d.year >= currentYear) continue; // ignore current/future years
       const r = d.boxReal ?? d.boxPct;
       acc *= (1 + r / 100);
     }
     return parseFloat(((acc - 1) * 100).toFixed(2));
-  }, [annualData, currentYear]);
+  }, [annualData]);
 
   // ── 2026 projection data ─────────────────────────────────
   const projectionData = useMemo(() => {
