@@ -8,7 +8,7 @@ import {
 
 interface Props { user: { id: number; name: string; email: string; role: string }; }
 interface Asset { id: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
-interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; updatedAt: string; }
+interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; updatedAt: string; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
 
 // ── Box Capital historical returns (real data — sócio com sorteio) ────────────
@@ -296,8 +296,11 @@ export default function ClientDashboard({ user }: Props) {
     setGoalInput(String(portfolio.goal ?? ""));
   }
 
-  // Real Box Capital accumulated return — annualData already excludes current year
+  // Rentabilidade Total: admin manual override takes priority, otherwise auto-calculated
   const boxRealAccumPct = useMemo(() => {
+    // If admin set a custom value, use it directly
+    if (portfolio?.customReturnPct != null) return portfolio.customReturnPct;
+    // Otherwise compound real Box Capital returns (excludes current year via annualData)
     if (!annualData.length) return null;
     let acc = 1;
     for (const d of annualData) {
@@ -305,7 +308,7 @@ export default function ClientDashboard({ user }: Props) {
       acc *= (1 + r / 100);
     }
     return parseFloat(((acc - 1) * 100).toFixed(2));
-  }, [annualData]);
+  }, [annualData, portfolio?.customReturnPct]);
 
   // ── 2026 projection data ─────────────────────────────────
   const projectionData = useMemo(() => {
