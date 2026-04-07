@@ -295,16 +295,18 @@ export default function ClientDashboard({ user }: Props) {
   }
 
   // Real Box Capital accumulated return (compound from all years in history)
-  // Computed from BOX_CAPITAL_RETURNS for years the client has snapshots
+  // Excludes the current year (2026+) since it has no closed result yet
+  const currentYear = String(new Date().getFullYear());
   const boxRealAccumPct = useMemo(() => {
     if (!annualData.length) return null;
     let acc = 1;
     for (const d of annualData) {
+      if (d.year >= currentYear) continue; // ignore current/future years
       const r = d.boxReal ?? d.boxPct;
       acc *= (1 + r / 100);
     }
     return parseFloat(((acc - 1) * 100).toFixed(2));
-  }, [annualData]);
+  }, [annualData, currentYear]);
 
   // ── 2026 projection data ─────────────────────────────────
   const projectionData = useMemo(() => {
