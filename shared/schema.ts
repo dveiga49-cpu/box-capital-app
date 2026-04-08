@@ -26,8 +26,9 @@ export const portfolios = sqliteTable("portfolios", {
   initialValue:   real("initial_value").notNull().default(0),
   goal:           real("goal").notNull().default(500000),
   note:           text("note"),
-  projectionRate: real("projection_rate").default(1), // % monthly growth for 2026 projection
-  updatedAt:      text("updated_at").notNull().default(new Date().toISOString()),
+  projectionRate:   real("projection_rate").default(1), // % monthly growth for 2026 projection
+  customReturnPct:  real("custom_return_pct"),           // manual override for Rentabilidade Total
+  updatedAt:        text("updated_at").notNull().default(new Date().toISOString()),
 });
 
 export const insertPortfolioSchema = createInsertSchema(portfolios).omit({ id: true, updatedAt: true });
