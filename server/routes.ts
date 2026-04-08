@@ -272,8 +272,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.patch("/api/portfolio/:id", requireAdmin, async (req, res) => {
-    const { goal, note, initialValue, projectionRate } = req.body;
-    const updated = await storage.updatePortfolio(parseInt(req.params.id), { goal, note, initialValue, projectionRate });
+    const { goal, note, initialValue, projectionRate, customReturnPct } = req.body;
+    const updated = await storage.updatePortfolio(parseInt(req.params.id), { goal, note, initialValue, projectionRate, customReturnPct });
     res.json(updated);
   });
 
