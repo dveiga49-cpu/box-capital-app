@@ -57,6 +57,8 @@ async function initDb() {
     );
     -- Add withdrawal column if not exists (safe migration)
     ALTER TABLE snapshots ADD COLUMN IF NOT EXISTS withdrawal REAL DEFAULT 0;
+    -- Add custom_return_pct column if not exists (safe migration)
+    ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS custom_return_pct REAL;
   `);
 
   // Seed admin if not exists
@@ -209,7 +211,7 @@ class PgStorage implements IStorage {
     }
     values.push(id);
     const { rows } = await pool.query(
-      `UPDATE assets SET ${fields.join(",")} WHERE id=$${i} RETURNING *`,
+      `UPDATE assets SET ${fields.join(",")} WHERE id=$${i} RETURNING *",
       values
     );
     return mapAsset(rows[0]);
