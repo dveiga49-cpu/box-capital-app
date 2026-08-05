@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
-import type { User, InsertUser, Portfolio, InsertPortfolio, Asset, InsertAsset, Snapshot, InsertSnapshot } from "@shared/schema";
+import type { User, InsertUser, Portfolio, InsertPortfolio, Asset, InsertAsset, Snapshot, InsertSnapshot, Projection, InsertProjection } from "@shared/schema";
 
 // ── PostgreSQL connection ──────────────────────────────────
 const dbUrl = process.env.DATABASE_URL || "";
@@ -59,6 +59,16 @@ async function initDb() {
     ALTER TABLE snapshots ADD COLUMN IF NOT EXISTS withdrawal REAL DEFAULT 0;
     -- Add custom_return_pct column if not exists (safe migration)
     ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS custom_return_pct REAL;
+    -- Monthly projections (expectativa futura, distinta de snapshots reais)
+    CREATE TABLE IF NOT EXISTS projections (
+      id SERIAL PRIMARY KEY,
+      portfolio_id INTEGER NOT NULL REFERENCES portfolios(id),
+      month TEXT NOT NULL,
+      value REAL NOT NULL,
+      withdrawal REAL DEFAULT 0,
+      note TEXT,
+      UNIQUE (portfolio_id, month)
+    );
   `);
 
   // Seed admin if not exists
@@ -95,6 +105,10 @@ export interface IStorage {
   upsertSnapshot(data: InsertSnapshot): Promise<Snapshot>;
   updateSnapshot(id: number, data: Partial<InsertSnapshot>): Promise<Snapshot>;
   deleteSnapshot(id: number): Promise<void>;
+  getProjectionsByPortfolioId(portfolioId: number): Promise<Projection[]>;
+  upsertProjection(data: InsertProjection): Promise<Projection>;
+  updateProjection(id: number, data: Partial<InsertProjection>): Promise<Projection>;
+  deleteProjection(id: number): Promise<void>;
 }
 
 // ── Row mappers ────────────────────────────────────────────
@@ -109,6 +123,9 @@ function mapAsset(r: any): Asset {
 }
 function mapSnapshot(r: any): Snapshot {
   return { id: r.id, portfolioId: r.portfolio_id, month: r.month, value: parseFloat(r.value), cdi: r.cdi != null ? parseFloat(r.cdi) : null, ibov: r.ibov != null ? parseFloat(r.ibov) : null, dolar: r.dolar != null ? parseFloat(r.dolar) : null, withdrawal: r.withdrawal != null ? parseFloat(r.withdrawal) : 0 };
+}
+function mapProjection(r: any): Projection {
+  return { id: r.id, portfolioId: r.portfolio_id, month: r.month, value: parseFloat(r.value), withdrawal: r.withdrawal != null ? parseFloat(r.withdrawal) : 0, note: r.note ?? null };
 }
 
 // ── PostgreSQL Storage ─────────────────────────────────────
@@ -211,7 +228,7 @@ class PgStorage implements IStorage {
     }
     values.push(id);
     const { rows } = await pool.query(
-      `UPDATE assets SET ${fields.join(",")} WHERE id=$${i} RETURNING *",
+      `UPDATE assets SET ${fields.join(",")} WHERE id=$${i} RETURNING *`,
       values
     );
     return mapAsset(rows[0]);
@@ -250,6 +267,38 @@ class PgStorage implements IStorage {
   }
   async deleteSnapshot(id: number) {
     await pool.query("DELETE FROM snapshots WHERE id=$1", [id]);
+  }
+  async getProjectionsByPortfolioId(portfolioId: number) {
+    const { rows } = await pool.query("SELECT * FROM projections WHERE portfolio_id=$1 ORDER BY month", [portfolioId]);
+    return rows.map(mapProjection);
+  }
+  async upsertProjection(data: InsertProjection) {
+    const { rows: existing } = await pool.query(
+      "SELECT id FROM projections WHERE portfolio_id=$1 AND month=$2",
+      [data.portfolioId, data.month]
+    );
+    if (existing.length > 0) {
+      const { rows } = await pool.query(
+        "UPDATE projections SET value=$1, withdrawal=$2, note=$3 WHERE id=$4 RETURNING *",
+        [data.value, (data as any).withdrawal ?? 0, data.note ?? null, existing[0].id]
+      );
+      return mapProjection(rows[0]);
+    }
+    const { rows } = await pool.query(
+      "INSERT INTO projections (portfolio_id, month, value, withdrawal, note) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+      [data.portfolioId, data.month, data.value, (data as any).withdrawal ?? 0, data.note ?? null]
+    );
+    return mapProjection(rows[0]);
+  }
+  async updateProjection(id: number, data: Partial<InsertProjection>) {
+    const { rows } = await pool.query(
+      "UPDATE projections SET month=$1, value=$2, withdrawal=$3, note=$4 WHERE id=$5 RETURNING *",
+      [data.month, data.value, (data as any).withdrawal ?? 0, data.note ?? null, id]
+    );
+    return mapProjection(rows[0]);
+  }
+  async deleteProjection(id: number) {
+    await pool.query("DELETE FROM projections WHERE id=$1", [id]);
   }
 }
 

@@ -7,7 +7,8 @@ interface Client { id: number; name: string; email: string; phone: string | null
 interface Asset { id: number; portfolioId: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
 interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
-interface PortfolioData { portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[]; }
+interface Projection { id: number; portfolioId: number; month: string; value: number; withdrawal?: number | null; note?: string | null; }
+interface PortfolioData { portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[]; projections: Projection[]; }
 
 function fmtBRL(v: number) { return "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -46,6 +47,8 @@ export default function AdminDashboard({ user }: Props) {
   const [modalEditAsset, setModalEditAsset] = useState<Asset | null>(null);
   const [modalAddSnap, setModalAddSnap] = useState(false);
   const [modalEditSnap, setModalEditSnap] = useState<Snapshot | null>(null);
+  const [modalAddProj, setModalAddProj] = useState(false);
+  const [modalEditProj, setModalEditProj] = useState<Projection | null>(null);
 
   const showMsg = (text: string, type: "success" | "error" = "success") => {
     setMsg(text); setMsgType(type);
@@ -84,6 +87,11 @@ export default function AdminDashboard({ user }: Props) {
   const deleteSnapMut = useMutation({
     mutationFn: (id: number) => fetch(`/api/snapshots/${id}`, { method: "DELETE" }).then(r => r.json()),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); showMsg("Snapshot removido."); },
+  });
+
+  const deleteProjMut = useMutation({
+    mutationFn: (id: number) => fetch(`/api/projections/${id}`, { method: "DELETE" }).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); showMsg("Item de projeção removido."); },
   });
 
   // Latest snapshot value as patrimony when no assets
@@ -230,6 +238,10 @@ export default function AdminDashboard({ user }: Props) {
                       className="text-xs border border-border px-3 py-1.5 rounded-lg hover:border-yellow-500/40 hover:text-gold transition-colors flex items-center gap-1">
                       <IconPlus /> Snapshot
                     </button>
+                    <button onClick={() => setModalAddProj(true)}
+                      className="text-xs border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-lg hover:border-blue-400/60 transition-colors flex items-center gap-1">
+                      <IconPlus /> Expectativa
+                    </button>
                     <button onClick={() => { setTab("clients"); setSelectedClient(null); }}
                       className="text-xs text-muted-foreground hover:text-foreground">← Voltar</button>
                   </div>
@@ -361,6 +373,59 @@ export default function AdminDashboard({ user }: Props) {
                     </div>
                   )}
                 </div>
+
+                {/* ── Projeções (expectativa futura — NÃO são dados reais) ── */}
+                <div className="bg-card border rounded-xl p-4" style={{ borderColor: "rgba(96,165,250,0.25)" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <span className="text-blue-400">Expectativa Futura (Projeção)</span>
+                    </h3>
+                    <button onClick={() => setModalAddProj(true)}
+                      className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                      <IconPlus /> Adicionar
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-blue-300/70 mb-3">
+                    Valores informados aqui são expectativa do assessor, não desempenho realizado. São exibidos ao cliente com rótulo "Expectativa" — nunca como dado real.
+                  </p>
+                  {!portfolioData?.projections.length ? (
+                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhuma expectativa cadastrada. Clique em "+ Adicionar" para lançar a projeção mês a mês.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border">
+                            {["Mês", "Saldo projetado (R$)", "Saque planejado (R$)", "Nota", "Ações"].map(h => (
+                              <th key={h} className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...(portfolioData.projections)].sort((a, b) => a.month.localeCompare(b.month)).map(p => (
+                            <tr key={p.id} className="border-b border-border/40 last:border-0 hover:bg-accent/20 transition-colors">
+                              <td className="py-2.5 px-2 font-semibold text-white">{p.month}</td>
+                              <td className="py-2.5 px-2 font-semibold text-blue-400 tabular">{fmtBRL(p.value)}</td>
+                              <td className="py-2.5 px-2 tabular">{p.withdrawal && p.withdrawal > 0 ? <span className="text-red-400 font-semibold">-{fmtBRL(p.withdrawal)}</span> : <span className="text-muted-foreground">—</span>}</td>
+                              <td className="py-2.5 px-2 text-muted-foreground truncate max-w-[160px]">{p.note || "—"}</td>
+                              <td className="py-2.5 px-2">
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => setModalEditProj(p)}
+                                    className="text-muted-foreground hover:text-blue-400 transition-colors p-1" title="Editar">
+                                    <IconEdit />
+                                  </button>
+                                  <button onClick={() => { if (confirm(`Remover expectativa de ${p.month}?`)) deleteProjMut.mutate(p.id); }}
+                                    className="text-muted-foreground hover:text-red-400 transition-colors p-1" title="Remover">
+                                    <IconTrash />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -433,6 +498,24 @@ export default function AdminDashboard({ user }: Props) {
           snapshot={modalEditSnap}
           onClose={() => setModalEditSnap(null)}
           onSuccess={() => { showMsg("Snapshot atualizado!"); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); setModalEditSnap(null); }}
+        />
+      )}
+
+      {/* Add projection (expectativa) */}
+      {modalAddProj && portfolioData && (
+        <AddProjectionModal
+          portfolioId={portfolioData.portfolio.id}
+          onClose={() => setModalAddProj(false)}
+          onSuccess={() => { showMsg("Expectativa adicionada!"); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); }}
+        />
+      )}
+
+      {/* Edit projection (expectativa) */}
+      {modalEditProj && (
+        <EditProjectionModal
+          projection={modalEditProj}
+          onClose={() => setModalEditProj(null)}
+          onSuccess={() => { showMsg("Expectativa atualizada!"); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); setModalEditProj(null); }}
         />
       )}
     </div>
@@ -900,6 +983,100 @@ function AdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-1 disabled:opacity-60">
           {loading ? "Salvando..." : "Alterar Senha"}
+        </button>
+      </form>
+    </ModalShell>
+  );
+}
+
+// ══════════════════════════════════════════════
+// ADD PROJECTION (expectativa futura — não é dado real)
+// ══════════════════════════════════════════════
+function AddProjectionModal({ portfolioId, onClose, onSuccess }: { portfolioId: number; onClose: () => void; onSuccess: () => void }) {
+  const [month, setMonth] = useState(""); const [value, setValue] = useState("");
+  const [withdrawal, setWithdrawal] = useState(""); const [note, setNote] = useState("");
+  const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setErr("");
+    if (!month || !value) { setErr("Mês e valor são obrigatórios."); return; }
+    setLoading(true);
+    const body: any = { month, value: parseFloat(value), withdrawal: withdrawal ? parseFloat(withdrawal) : 0, note: note || null };
+    const r = await fetch(`/api/portfolio/${portfolioId}/projections`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json(); setLoading(false);
+    if (!r.ok) { setErr(d.error || "Erro."); return; }
+    onSuccess(); onClose();
+  }
+
+  return (
+    <ModalShell title="Lançar Expectativa (não é dado real)" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+          <p className="text-[11px] text-blue-300">
+            Isto é uma projeção/expectativa futura informada por você — o cliente sempre verá com o rótulo "Expectativa", separado dos dados reais (Snapshots).
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Mês de referência *</label>
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-blue-500/50 transition-all" />
+        </div>
+        <Field label="Saldo projetado (R$) *" value={value} onChange={setValue} placeholder="420130.76" type="number" />
+        <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+          <p className="text-[11px] text-red-400 font-medium mb-1.5">Saque planejado neste mês</p>
+          <Field label="Valor do saque (R$) — deixe em branco se não houver" value={withdrawal} onChange={setWithdrawal} placeholder="0" type="number" />
+        </div>
+        <Field label="Nota (opcional)" value={note} onChange={setNote} placeholder="Ex: saque programado para reforma" />
+        {err && <p className="text-xs text-red-400">{err}</p>}
+        <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60 bg-blue-500/90 hover:bg-blue-500 text-white transition-colors">
+          {loading ? "Salvando..." : "Salvar Expectativa"}
+        </button>
+      </form>
+    </ModalShell>
+  );
+}
+
+// ══════════════════════════════════════════════
+// EDIT PROJECTION (expectativa futura — não é dado real)
+// ══════════════════════════════════════════════
+function EditProjectionModal({ projection, onClose, onSuccess }: { projection: Projection; onClose: () => void; onSuccess: () => void }) {
+  const [month, setMonth] = useState(projection.month);
+  const [value, setValue] = useState(String(projection.value));
+  const [withdrawal, setWithdrawal] = useState(projection.withdrawal && projection.withdrawal > 0 ? String(projection.withdrawal) : "");
+  const [note, setNote] = useState(projection.note ?? "");
+  const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setErr("");
+    if (!month || !value) { setErr("Mês e valor são obrigatórios."); return; }
+    setLoading(true);
+    const body: any = { month, value: parseFloat(value), withdrawal: withdrawal ? parseFloat(withdrawal) : 0, note: note || null };
+    const r = await fetch(`/api/projections/${projection.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    const d = await r.json(); setLoading(false);
+    if (!r.ok) { setErr(d.error || "Erro."); return; }
+    onSuccess();
+  }
+
+  return (
+    <ModalShell title={`Editar Expectativa — ${projection.month}`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Mês de referência *</label>
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-blue-500/50 transition-all" />
+        </div>
+        <Field label="Saldo projetado (R$) *" value={value} onChange={setValue} placeholder="420130.76" type="number" />
+        <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+          <p className="text-[11px] text-red-400 font-medium mb-1.5">Saque planejado neste mês</p>
+          <Field label="Valor do saque (R$) — deixe em branco se não houver" value={withdrawal} onChange={setWithdrawal} placeholder="0" type="number" />
+        </div>
+        <Field label="Nota (opcional)" value={note} onChange={setNote} placeholder="Ex: saque programado para reforma" />
+        {err && <p className="text-xs text-red-400">{err}</p>}
+        <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60 bg-blue-500/90 hover:bg-blue-500 text-white transition-colors">
+          {loading ? "Salvando..." : "Salvar Alterações"}
         </button>
       </form>
     </ModalShell>

@@ -10,6 +10,7 @@ interface Props { user: { id: number; name: string; email: string; role: string 
 interface Asset { id: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
 interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; updatedAt: string; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
+interface Projection { id: number; portfolioId: number; month: string; value: number; withdrawal?: number | null; note?: string | null; }
 
 // ── Box Capital historical returns (real data — sócio com sorteio) ────────────
 // Source: official Box Capital performance table
@@ -255,7 +256,7 @@ export default function ClientDashboard({ user }: Props) {
   const [goalErr, setGoalErr] = useState("");
   const goalInitialized = useRef(false);
 
-  const { data, isLoading } = useQuery<{ portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[] }>({
+  const { data, isLoading } = useQuery<{ portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[]; projections: Projection[] }>({
     queryKey: ["/api/portfolio", user.id],
     queryFn: () => fetch(`/api/portfolio/${user.id}`).then(r => r.json()),
     staleTime: 30_000,
@@ -273,6 +274,7 @@ export default function ClientDashboard({ user }: Props) {
   const assets = data?.assets ?? [];
   const portfolio = data?.portfolio;
   const snapshots = data?.snapshots ?? [];
+  const projections = data?.projections ?? [];
 
   const assetsTotal = assets.reduce((s, a) => s + a.quantity * a.currentPrice, 0);
   // Use latest snapshot value as total when no assets are tracked individually
@@ -310,8 +312,27 @@ export default function ClientDashboard({ user }: Props) {
     return parseFloat(((acc - 1) * 100).toFixed(2));
   }, [annualData, portfolio?.customReturnPct]);
 
-  // ── 2026 projection data ─────────────────────────────────
+  // ── Projeção (expectativa) ─────────────────────────────────
+  // Prioridade: se o assessor lançou expectativa mês a mês manualmente
+  // (tabela `projections`), usamos ela — inclui saques planejados.
+  // Caso contrário, cai no cálculo automático por crescimento composto.
+  // Em NENHUM caso isso é "dado real" — sempre rotulado como Expectativa.
+  const monthLabels: Record<string, string> = { "01":"Jan","02":"Fev","03":"Mar","04":"Abr","05":"Mai","06":"Jun","07":"Jul","08":"Ago","09":"Set","10":"Out","11":"Nov","12":"Dez" };
+  const hasManualProjection = projections.length > 0;
   const projectionData = useMemo(() => {
+    if (projections.length > 0) {
+      return [...projections]
+        .sort((a, b) => a.month.localeCompare(b.month))
+        .map(p => {
+          const [, mm] = p.month.split("-");
+          const yy = p.month.slice(2, 4);
+          return {
+            label: `${monthLabels[mm] ?? mm}/${yy}`,
+            projected: p.value,
+            withdrawal: p.withdrawal ?? 0,
+          };
+        });
+    }
     const rate = (portfolio?.projectionRate ?? 1) / 100; // monthly rate as decimal
     // Base: latest snapshot value, or total
     const base = latestSnapshot?.value ?? total;
@@ -320,8 +341,9 @@ export default function ClientDashboard({ user }: Props) {
     return months.map((m, i) => ({
       label: `${m}/26`,
       projected: parseFloat((base * Math.pow(1 + rate, i + 1)).toFixed(2)),
+      withdrawal: 0,
     }));
-  }, [portfolio?.projectionRate, latestSnapshot, total]);
+  }, [projections, portfolio?.projectionRate, latestSnapshot, total]);
 
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-background">
@@ -552,14 +574,15 @@ export default function ClientDashboard({ user }: Props) {
                 className="rounded-2xl p-5"
                 style={{ background: "#131620", border: "1px solid rgba(96,165,250,0.15)" }}
               >
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-2">
                   <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2"><path d="M2 12h20M12 2l10 10-10 10"/></svg>
                       Projeção 2026
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded-full px-2 py-0.5">Expectativa</span>
                     </h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Projeção baseada em crescimento composto
+                      {hasManualProjection ? "Expectativa informada pelo assessor — não são dados reais" : "Projeção baseada em crescimento composto"}
                     </p>
                   </div>
                   <div className="text-right">
@@ -569,6 +592,9 @@ export default function ClientDashboard({ user }: Props) {
                     </p>
                   </div>
                 </div>
+                <p className="text-[10px] text-blue-300/70 mb-3">
+                  Esta projeção é uma estimativa futura e não reflete rentabilidade já realizada.
+                </p>
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={projectionData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                     <defs>
@@ -592,13 +618,20 @@ export default function ClientDashboard({ user }: Props) {
                     <Tooltip
                       content={({ active, payload, label }) => {
                         if (!active || !payload?.length) return null;
+                        const point = payload[0]?.payload as { projected: number; withdrawal?: number } | undefined;
                         return (
                           <div className="bg-[#1a1c24] border border-[rgba(96,165,250,0.2)] rounded-xl px-4 py-3 shadow-xl text-xs">
-                            <p className="text-blue-400 font-bold text-sm mb-1">{label}</p>
+                            <p className="text-blue-400 font-bold text-sm mb-1">{label} <span className="text-[9px] text-blue-300 font-normal">(expectativa)</span></p>
                             <div className="flex items-center justify-between gap-4">
                               <span className="text-muted-foreground">Projetado</span>
                               <span className="font-bold text-white tabular">{fmtBRL(payload[0]?.value ?? 0)}</span>
                             </div>
+                            {!!point?.withdrawal && point.withdrawal > 0 && (
+                              <div className="flex items-center justify-between gap-4 mt-1">
+                                <span className="text-muted-foreground">Saque planejado</span>
+                                <span className="font-bold text-red-400 tabular">-{fmtBRL(point.withdrawal)}</span>
+                              </div>
+                            )}
                           </div>
                         );
                       }}

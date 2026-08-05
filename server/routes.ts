@@ -268,7 +268,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!portfolio) return res.status(404).json({ error: "Portfólio não encontrado" });
     const assets = await storage.getAssetsByPortfolioId(portfolio.id);
     const snapshots = await storage.getSnapshotsByPortfolioId(portfolio.id);
-    res.json({ portfolio, assets, snapshots });
+    const projections = await storage.getProjectionsByPortfolioId(portfolio.id);
+    res.json({ portfolio, assets, snapshots, projections });
   });
 
   app.patch("/api/portfolio/:id", requireAdmin, async (req, res) => {
@@ -393,6 +394,33 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   app.delete("/api/snapshots/:id", requireAdmin, async (_req, res) => {
     await storage.deleteSnapshot(parseInt(_req.params.id));
+    res.json({ ok: true });
+  });
+
+  // ── PROJECTIONS (expectativa futura — admin only) ──────
+  // Diferente de /snapshots (histórico real), estas rotas gerenciam a
+  // expectativa mês a mês informada pelo assessor. Nunca é exibida como
+  // "dados reais" no cliente.
+  app.post("/api/portfolio/:portfolioId/projections", requireAdmin, async (req, res) => {
+    const portfolioId = parseInt(req.params.portfolioId);
+    const { month, value, withdrawal, note } = req.body;
+    if (!month || value === undefined) return res.status(400).json({ error: "Mês e valor são obrigatórios" });
+    const data = { portfolioId, month, value: parseFloat(value), withdrawal: withdrawal ? parseFloat(withdrawal) : 0, note: note ?? null };
+    const proj = await storage.upsertProjection(data as any);
+    res.json(proj);
+  });
+
+  app.patch("/api/projections/:id", requireAdmin, async (req, res) => {
+    const { month, value, withdrawal, note } = req.body;
+    const proj = await storage.updateProjection(parseInt(req.params.id), {
+      month, value: value !== undefined ? parseFloat(value) : undefined,
+      withdrawal: withdrawal ? parseFloat(withdrawal) : 0, note: note ?? null,
+    } as any);
+    res.json(proj);
+  });
+
+  app.delete("/api/projections/:id", requireAdmin, async (_req, res) => {
+    await storage.deleteProjection(parseInt(_req.params.id));
     res.json({ ok: true });
   });
 }

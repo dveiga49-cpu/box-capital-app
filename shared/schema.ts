@@ -66,3 +66,20 @@ export const snapshots = sqliteTable("snapshots", {
 export const insertSnapshotSchema = createInsertSchema(snapshots).omit({ id: true });
 export type InsertSnapshot = z.infer<typeof insertSnapshotSchema>;
 export type Snapshot = typeof snapshots.$inferSelect;
+
+// ── Monthly projections (expectativa futura — NÃO são dados reais) ──
+// Diferente de `snapshots` (histórico real realizado), esta tabela guarda
+// a expectativa/projeção mês a mês informada pelo assessor, incluindo
+// saques planejados. É sempre exibida no cliente com rótulo "Expectativa".
+export const projections = sqliteTable("projections", {
+  id:          integer("id").primaryKey({ autoIncrement: true }),
+  portfolioId: integer("portfolio_id").notNull().references(() => portfolios.id),
+  month:       text("month").notNull(),          // "2026-01"
+  value:       real("value").notNull(),           // saldo final projetado
+  withdrawal:  real("withdrawal").default(0),      // saque planejado no mês
+  note:        text("note"),
+});
+
+export const insertProjectionSchema = createInsertSchema(projections).omit({ id: true });
+export type InsertProjection = z.infer<typeof insertProjectionSchema>;
+export type Projection = typeof projections.$inferSelect;
