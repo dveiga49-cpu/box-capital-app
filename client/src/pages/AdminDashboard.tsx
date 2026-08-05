@@ -49,6 +49,7 @@ export default function AdminDashboard({ user }: Props) {
   const [modalEditSnap, setModalEditSnap] = useState<Snapshot | null>(null);
   const [modalAddProj, setModalAddProj] = useState(false);
   const [modalEditProj, setModalEditProj] = useState<Projection | null>(null);
+  const [modalBulkProj, setModalBulkProj] = useState(false);
 
   const showMsg = (text: string, type: "success" | "error" = "success") => {
     setMsg(text); setMsgType(type);
@@ -242,6 +243,10 @@ export default function AdminDashboard({ user }: Props) {
                       className="text-xs border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-lg hover:border-blue-400/60 transition-colors flex items-center gap-1">
                       <IconPlus /> Expectativa
                     </button>
+                    <button onClick={() => setModalBulkProj(true)}
+                      className="text-xs border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-lg hover:border-blue-400/60 transition-colors flex items-center gap-1">
+                      <IconPlus /> Ano Completo
+                    </button>
                     <button onClick={() => { setTab("clients"); setSelectedClient(null); }}
                       className="text-xs text-muted-foreground hover:text-foreground">← Voltar</button>
                   </div>
@@ -380,10 +385,16 @@ export default function AdminDashboard({ user }: Props) {
                     <h3 className="text-sm font-semibold flex items-center gap-2">
                       <span className="text-blue-400">Expectativa Futura (Projeção)</span>
                     </h3>
-                    <button onClick={() => setModalAddProj(true)}
-                      className="text-xs text-blue-400 hover:underline flex items-center gap-1">
-                      <IconPlus /> Adicionar
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setModalBulkProj(true)}
+                        className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                        <IconPlus /> Lançar Ano Completo
+                      </button>
+                      <button onClick={() => setModalAddProj(true)}
+                        className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                        <IconPlus /> Adicionar
+                      </button>
+                    </div>
                   </div>
                   <p className="text-[10px] text-blue-300/70 mb-3">
                     Valores informados aqui são expectativa do assessor, não desempenho realizado. São exibidos ao cliente com rótulo "Expectativa" — nunca como dado real.
@@ -516,6 +527,15 @@ export default function AdminDashboard({ user }: Props) {
           projection={modalEditProj}
           onClose={() => setModalEditProj(null)}
           onSuccess={() => { showMsg("Expectativa atualizada!"); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); setModalEditProj(null); }}
+        />
+      )}
+
+      {/* Bulk-launch a full year of projections (expectativa) */}
+      {modalBulkProj && portfolioData && (
+        <BulkProjectionModal
+          portfolioId={portfolioData.portfolio.id}
+          onClose={() => setModalBulkProj(false)}
+          onSuccess={(count) => { showMsg(`${count} meses de expectativa lançados!`); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); setModalBulkProj(false); }}
         />
       )}
     </div>
@@ -1077,6 +1097,103 @@ function EditProjectionModal({ projection, onClose, onSuccess }: { projection: P
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60 bg-blue-500/90 hover:bg-blue-500 text-white transition-colors">
           {loading ? "Salvando..." : "Salvar Alterações"}
+        </button>
+      </form>
+    </ModalShell>
+  );
+}
+
+// ══════════════════════════════════════════════
+// BULK PROJECTIONS — lançar um ano inteiro de expectativa de uma vez
+// (não são dados reais; sempre exibido ao cliente como "Expectativa")
+// ══════════════════════════════════════════════
+const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function BulkProjectionModal({ portfolioId, onClose, onSuccess }: { portfolioId: number; onClose: () => void; onSuccess: (count: number) => void }) {
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [rows, setRows] = useState(
+    MONTH_LABELS.map(() => ({ value: "", withdrawal: "", note: "" }))
+  );
+  const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
+
+  function updateRow(i: number, field: "value" | "withdrawal" | "note", v: string) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: v } : r));
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setErr("");
+    const filled = rows
+      .map((r, i) => ({ ...r, monthIdx: i }))
+      .filter(r => r.value.trim() !== "");
+    if (filled.length === 0) { setErr("Preencha ao menos um mês com saldo projetado."); return; }
+    if (!/^\d{4}$/.test(year)) { setErr("Ano inválido."); return; }
+    setLoading(true);
+    const body = {
+      rows: filled.map(r => ({
+        month: `${year}-${String(r.monthIdx + 1).padStart(2, "0")}`,
+        value: parseFloat(r.value),
+        withdrawal: r.withdrawal ? parseFloat(r.withdrawal) : 0,
+        note: r.note || null,
+      })),
+    };
+    const res = await fetch(`/api/portfolio/${portfolioId}/projections/bulk`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const d = await res.json(); setLoading(false);
+    if (!res.ok) { setErr(d.error || "Erro ao salvar."); return; }
+    onSuccess(d.count ?? filled.length);
+  }
+
+  return (
+    <ModalShell title="Lançar Ano Completo (Expectativa)" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+          <p className="text-[11px] text-blue-300">
+            Preencha os meses que quiser lançar de uma vez — os que ficarem em branco não serão salvos. Isto é sempre expectativa/projeção, nunca dado real; o cliente sempre verá com o rótulo "Expectativa".
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 max-w-[140px]">
+          <label className="text-xs font-medium text-muted-foreground">Ano</label>
+          <input type="number" value={year} onChange={e => setYear(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-blue-500/50 transition-all" />
+        </div>
+        <div className="overflow-x-auto border border-border rounded-lg">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border bg-accent/20">
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Mês</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Saldo projetado (R$)</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Saque (R$)</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Nota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MONTH_LABELS.map((label, i) => (
+                <tr key={label} className="border-b border-border/40 last:border-0">
+                  <td className="py-1.5 px-2 font-semibold text-white whitespace-nowrap">{label}/{year.slice(-2)}</td>
+                  <td className="py-1.5 px-1">
+                    <input type="number" value={rows[i].value} onChange={e => updateRow(i, "value", e.target.value)}
+                      placeholder="0"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-blue-500/50" />
+                  </td>
+                  <td className="py-1.5 px-1">
+                    <input type="number" value={rows[i].withdrawal} onChange={e => updateRow(i, "withdrawal", e.target.value)}
+                      placeholder="0"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-blue-500/50" />
+                  </td>
+                  <td className="py-1.5 px-1">
+                    <input type="text" value={rows[i].note} onChange={e => updateRow(i, "note", e.target.value)}
+                      placeholder="opcional"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-blue-500/50" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {err && <p className="text-xs text-red-400">{err}</p>}
+        <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg text-sm font-semibold mt-1 disabled:opacity-60 bg-blue-500/90 hover:bg-blue-500 text-white transition-colors">
+          {loading ? "Salvando..." : "Salvar Ano Completo"}
         </button>
       </form>
     </ModalShell>

@@ -423,4 +423,30 @@ export function registerRoutes(httpServer: Server, app: Express) {
     await storage.deleteProjection(parseInt(_req.params.id));
     res.json({ ok: true });
   });
+
+  // Lançamento em lote — permite ao admin lançar um ano inteiro de
+  // expectativa (até 12 meses) numa única chamada, direto pela UI,
+  // sem precisar de acesso ao banco de dados.
+  app.post("/api/portfolio/:portfolioId/projections/bulk", requireAdmin, async (req, res) => {
+    const portfolioId = parseInt(req.params.portfolioId);
+    const rows = req.body?.rows;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "Envie um array 'rows' com pelo menos um mês." });
+    }
+    const results = [];
+    for (const row of rows) {
+      const { month, value, withdrawal, note } = row ?? {};
+      if (!month || value === undefined || value === null || value === "") continue;
+      const data = {
+        portfolioId,
+        month,
+        value: parseFloat(value),
+        withdrawal: withdrawal ? parseFloat(withdrawal) : 0,
+        note: note ?? null,
+      };
+      const proj = await storage.upsertProjection(data as any);
+      results.push(proj);
+    }
+    res.json({ ok: true, count: results.length, projections: results });
+  });
 }
