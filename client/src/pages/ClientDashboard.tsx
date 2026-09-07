@@ -8,7 +8,7 @@ import {
 
 interface Props { user: { id: number; name: string; email: string; role: string }; }
 interface Asset { id: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
-interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; updatedAt: string; }
+interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; recurringWithdrawal: number | null; recurringWithdrawalSince: string | null; updatedAt: string; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
 interface Projection { id: number; portfolioId: number; month: string; value: number; withdrawal?: number | null; note?: string | null; }
 

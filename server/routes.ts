@@ -273,8 +273,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
   });
 
   app.patch("/api/portfolio/:id", requireAdmin, async (req, res) => {
-    const { goal, note, initialValue, projectionRate, customReturnPct } = req.body;
-    const updated = await storage.updatePortfolio(parseInt(req.params.id), { goal, note, initialValue, projectionRate, customReturnPct });
+    const { goal, note, initialValue, projectionRate, customReturnPct, recurringWithdrawal, recurringWithdrawalSince } = req.body;
+    const updated = await storage.updatePortfolio(parseInt(req.params.id), {
+      goal, note, initialValue, projectionRate, customReturnPct,
+      recurringWithdrawal: recurringWithdrawal !== undefined ? (recurringWithdrawal === null || recurringWithdrawal === "" ? null : parseFloat(recurringWithdrawal)) : undefined,
+      recurringWithdrawalSince: recurringWithdrawalSince !== undefined ? (recurringWithdrawalSince || null) : undefined,
+    } as any);
     res.json(updated);
   });
 

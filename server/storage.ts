@@ -59,6 +59,9 @@ async function initDb() {
     ALTER TABLE snapshots ADD COLUMN IF NOT EXISTS withdrawal REAL DEFAULT 0;
     -- Add custom_return_pct column if not exists (safe migration)
     ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS custom_return_pct REAL;
+    -- Add recurring monthly withdrawal columns if not exists (safe migration)
+    ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS recurring_withdrawal REAL;
+    ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS recurring_withdrawal_since TEXT;
     -- Monthly projections (expectativa futura, distinta de snapshots reais)
     CREATE TABLE IF NOT EXISTS projections (
       id SERIAL PRIMARY KEY,
@@ -116,7 +119,7 @@ function mapUser(r: any): User {
   return { id: r.id, name: r.name, email: r.email, password: r.password, role: r.role, phone: r.phone ?? null, active: r.active, createdAt: r.created_at };
 }
 function mapPortfolio(r: any): Portfolio {
-  return { id: r.id, userId: r.user_id, initialValue: parseFloat(r.initial_value), goal: parseFloat(r.goal), note: r.note ?? null, projectionRate: r.projection_rate ?? 1, customReturnPct: r.custom_return_pct != null ? parseFloat(r.custom_return_pct) : null, updatedAt: r.updated_at };
+  return { id: r.id, userId: r.user_id, initialValue: parseFloat(r.initial_value), goal: parseFloat(r.goal), note: r.note ?? null, projectionRate: r.projection_rate ?? 1, customReturnPct: r.custom_return_pct != null ? parseFloat(r.custom_return_pct) : null, recurringWithdrawal: r.recurring_withdrawal != null ? parseFloat(r.recurring_withdrawal) : null, recurringWithdrawalSince: r.recurring_withdrawal_since ?? null, updatedAt: r.updated_at };
 }
 function mapAsset(r: any): Asset {
   return { id: r.id, portfolioId: r.portfolio_id, name: r.name, symbol: r.symbol, quantity: parseFloat(r.quantity), avgPrice: parseFloat(r.avg_price), currentPrice: parseFloat(r.current_price), color: r.color };

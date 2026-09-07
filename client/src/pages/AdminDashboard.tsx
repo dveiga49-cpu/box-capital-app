@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 interface Props { user: { id: number; name: string; email: string; role: string }; }
 interface Client { id: number; name: string; email: string; phone: string | null; active: boolean; createdAt: string; }
 interface Asset { id: number; portfolioId: number; name: string; symbol: string; quantity: number; avgPrice: number; currentPrice: number; color: string; }
-interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; }
+interface Portfolio { id: number; userId: number; initialValue: number; goal: number; note: string | null; projectionRate: number | null; customReturnPct: number | null; recurringWithdrawal: number | null; recurringWithdrawalSince: string | null; }
 interface Snapshot { id: number; portfolioId: number; month: string; value: number; cdi?: number | null; ibov?: number | null; dolar?: number | null; withdrawal?: number | null; }
 interface Projection { id: number; portfolioId: number; month: string; value: number; withdrawal?: number | null; note?: string | null; }
 interface PortfolioData { portfolio: Portfolio; assets: Asset[]; snapshots: Snapshot[]; projections: Projection[]; }
@@ -505,6 +505,8 @@ export default function AdminDashboard({ user }: Props) {
       {modalAddSnap && portfolioData && (
         <AddSnapshotModal
           portfolioId={portfolioData.portfolio.id}
+          recurringWithdrawal={portfolioData.portfolio.recurringWithdrawal}
+          recurringWithdrawalSince={portfolioData.portfolio.recurringWithdrawalSince}
           onClose={() => setModalAddSnap(false)}
           onSuccess={() => { showMsg("Snapshot adicionado!"); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); }}
         />
@@ -523,6 +525,8 @@ export default function AdminDashboard({ user }: Props) {
       {modalBulkSnap && portfolioData && (
         <BulkSnapshotModal
           portfolioId={portfolioData.portfolio.id}
+          recurringWithdrawal={portfolioData.portfolio.recurringWithdrawal}
+          recurringWithdrawalSince={portfolioData.portfolio.recurringWithdrawalSince}
           onClose={() => setModalBulkSnap(false)}
           onSuccess={(count) => { showMsg(`${count} meses de histórico lançados!`); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); setModalBulkSnap(false); }}
         />
@@ -689,15 +693,20 @@ function EditPortfolioModal({ portfolio, onClose, onSuccess }: { portfolio: Port
   const [note, setNote] = useState(portfolio.note ?? "");
   const [projectionRate, setProjectionRate] = useState(String(portfolio.projectionRate ?? 1));
   const [customReturnPct, setCustomReturnPct] = useState(portfolio.customReturnPct != null ? String(portfolio.customReturnPct) : "");
+  const [recurringWithdrawal, setRecurringWithdrawal] = useState(portfolio.recurringWithdrawal != null ? String(portfolio.recurringWithdrawal) : "");
+  const [recurringSince, setRecurringSince] = useState(portfolio.recurringWithdrawalSince ?? "");
   const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
     if (!initialValue || !goal) { setErr("Valor inicial e meta são obrigatórios."); return; }
+    if (recurringWithdrawal.trim() !== "" && !recurringSince) { setErr("Informe a partir de qual mês o saque recorrente começa."); return; }
     setLoading(true);
     const body: any = { initialValue: parseFloat(initialValue), goal: parseFloat(goal), note, projectionRate: parseFloat(projectionRate) || 1 };
     if (customReturnPct.trim() !== "") body.customReturnPct = parseFloat(customReturnPct);
     else body.customReturnPct = null;
+    if (recurringWithdrawal.trim() !== "") { body.recurringWithdrawal = parseFloat(recurringWithdrawal); body.recurringWithdrawalSince = recurringSince; }
+    else { body.recurringWithdrawal = null; body.recurringWithdrawalSince = null; }
     const r = await fetch(`/api/portfolio/${portfolio.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
@@ -738,6 +747,22 @@ function EditPortfolioModal({ portfolio, onClose, onSuccess }: { portfolio: Port
             {customReturnPct.trim() !== ""
               ? <span className="text-yellow-400 font-semibold">&#9888; Valor manual ativo: {customReturnPct}% será exibido para o cliente.</span>
               : "Quando em branco, exibe o cálculo automático com base nos dados reais da Box Capital."}
+          </p>
+        </div>
+        <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+          <p className="text-[11px] text-red-400 font-medium mb-2">Saque Mensal Recorrente</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Valor do saque (R$)" value={recurringWithdrawal} onChange={setRecurringWithdrawal} placeholder="Ex: 3000" type="number" />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">A partir de</label>
+              <input type="month" value={recurringSince} onChange={e => setRecurringSince(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-yellow-600/50 transition-all" />
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+            {recurringWithdrawal.trim() !== ""
+              ? <span className="text-yellow-400">Este valor será sugerido automaticamente ao lançar um snapshot a partir do mês informado — você ainda pode ajustar ou zerar em cada mês.</span>
+              : "Deixe em branco se o cliente não tem saque recorrente configurado."}
           </p>
         </div>
         {err && <p className="text-xs text-red-400">{err}</p>}
@@ -858,11 +883,18 @@ function EditAssetModal({ asset, onClose, onSuccess }: { asset: Asset; onClose: 
 // ══════════════════════════════════════════════
 // ADD SNAPSHOT
 // ══════════════════════════════════════════════
-function AddSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: number; onClose: () => void; onSuccess: () => void }) {
+function AddSnapshotModal({ portfolioId, onClose, onSuccess, recurringWithdrawal, recurringWithdrawalSince }: { portfolioId: number; onClose: () => void; onSuccess: () => void; recurringWithdrawal?: number | null; recurringWithdrawalSince?: string | null }) {
   const [month, setMonth] = useState(""); const [value, setValue] = useState("");
   const [withdrawal, setWithdrawal] = useState("");
   const [cdi, setCdi] = useState(""); const [ibov, setIbov] = useState(""); const [dolar, setDolar] = useState("");
   const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
+
+  function handleMonthChange(v: string) {
+    setMonth(v);
+    if (recurringWithdrawal != null && recurringWithdrawalSince && v >= recurringWithdrawalSince) {
+      setWithdrawal(String(recurringWithdrawal));
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
@@ -884,13 +916,16 @@ function AddSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: nu
       <form onSubmit={submit} className="space-y-3">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">Mês de referência *</label>
-          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+          <input type="month" value={month} onChange={e => handleMonthChange(e.target.value)}
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-yellow-600/50 transition-all" />
         </div>
         <Field label="Patrimônio do cliente (R$) *" value={value} onChange={setValue} placeholder="43935" type="number" />
         <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
           <p className="text-[11px] text-red-400 font-medium mb-1.5">Saque realizado neste período</p>
           <Field label="Valor do saque (R$) — deixe em branco se não houve" value={withdrawal} onChange={setWithdrawal} placeholder="0" type="number" />
+          {recurringWithdrawal != null && recurringWithdrawalSince && month >= recurringWithdrawalSince && (
+            <p className="text-[10px] text-yellow-400 mt-1.5">Preenchido automaticamente com o saque recorrente configurado (R$ {recurringWithdrawal.toLocaleString("pt-BR")}). Ajuste se este mês foi diferente.</p>
+          )}
         </div>
         <div className="pt-2 border-t border-border">
           <p className="text-[11px] text-muted-foreground mb-2 font-medium">Benchmarks anuais (% do ano — preenchidos automaticamente)</p>
@@ -971,12 +1006,26 @@ function EditSnapshotModal({ snapshot, onClose, onSuccess }: { snapshot: Snapsho
 // ══════════════════════════════════════════════
 // BULK SNAPSHOT (lançamento em lote de dados reais — ano completo)
 // ══════════════════════════════════════════════
-function BulkSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: number; onClose: () => void; onSuccess: (count: number) => void }) {
+function BulkSnapshotModal({ portfolioId, onClose, onSuccess, recurringWithdrawal, recurringWithdrawalSince }: { portfolioId: number; onClose: () => void; onSuccess: (count: number) => void; recurringWithdrawal?: number | null; recurringWithdrawalSince?: string | null }) {
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [rows, setRows] = useState(
     MONTH_LABELS.map(() => ({ value: "", withdrawal: "", cdi: "", ibov: "", dolar: "" }))
   );
   const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
+
+  // Pré-preenche o saque recorrente configurado nos meses aplicáveis do ano selecionado
+  // (só nas células ainda vazias, sem sobrescrever valores já digitados pelo admin).
+  useEffect(() => {
+    if (recurringWithdrawal == null || !recurringWithdrawalSince) return;
+    setRows(prev => prev.map((r, i) => {
+      const monthStr = `${year}-${String(i + 1).padStart(2, "0")}`;
+      if (r.withdrawal === "" && monthStr >= recurringWithdrawalSince) {
+        return { ...r, withdrawal: String(recurringWithdrawal) };
+      }
+      return r;
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year]);
 
   function updateRow(i: number, field: "value" | "withdrawal" | "cdi" | "ibov" | "dolar", v: string) {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: v } : r));

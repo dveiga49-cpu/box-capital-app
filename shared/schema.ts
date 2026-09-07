@@ -28,6 +28,8 @@ export const portfolios = sqliteTable("portfolios", {
   note:           text("note"),
   projectionRate:   real("projection_rate").default(1), // % monthly growth for 2026 projection
   customReturnPct:  real("custom_return_pct"),           // manual override for Rentabilidade Total
+  recurringWithdrawal:      real("recurring_withdrawal"),           // monthly recurring withdrawal amount (R$), null = not configured
+  recurringWithdrawalSince: text("recurring_withdrawal_since"),      // month ("YYYY-MM") from which the recurring withdrawal applies
   updatedAt:        text("updated_at").notNull().default(new Date().toISOString()),
 });
 
