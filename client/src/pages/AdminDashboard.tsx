@@ -47,6 +47,7 @@ export default function AdminDashboard({ user }: Props) {
   const [modalEditAsset, setModalEditAsset] = useState<Asset | null>(null);
   const [modalAddSnap, setModalAddSnap] = useState(false);
   const [modalEditSnap, setModalEditSnap] = useState<Snapshot | null>(null);
+  const [modalBulkSnap, setModalBulkSnap] = useState(false);
   const [modalAddProj, setModalAddProj] = useState(false);
   const [modalEditProj, setModalEditProj] = useState<Projection | null>(null);
   const [modalBulkProj, setModalBulkProj] = useState(false);
@@ -333,10 +334,16 @@ export default function AdminDashboard({ user }: Props) {
                 <div className="bg-card border border-border rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold">Histórico Patrimonial (Snapshots)</h3>
-                    <button onClick={() => setModalAddSnap(true)}
-                      className="text-xs text-gold hover:underline flex items-center gap-1">
-                      <IconPlus /> Adicionar
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setModalBulkSnap(true)}
+                        className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                        <IconPlus /> Lançar Ano Completo
+                      </button>
+                      <button onClick={() => setModalAddSnap(true)}
+                        className="text-xs text-gold hover:underline flex items-center gap-1">
+                        <IconPlus /> Adicionar
+                      </button>
+                    </div>
                   </div>
                   {!portfolioData?.snapshots.length ? (
                     <p className="text-xs text-muted-foreground py-4 text-center">Nenhum snapshot. Clique em "+ Snapshot" para adicionar.</p>
@@ -509,6 +516,15 @@ export default function AdminDashboard({ user }: Props) {
           snapshot={modalEditSnap}
           onClose={() => setModalEditSnap(null)}
           onSuccess={() => { showMsg("Snapshot atualizado!"); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); setModalEditSnap(null); }}
+        />
+      )}
+
+      {/* Bulk-launch a full year of snapshots (dados reais) */}
+      {modalBulkSnap && portfolioData && (
+        <BulkSnapshotModal
+          portfolioId={portfolioData.portfolio.id}
+          onClose={() => setModalBulkSnap(false)}
+          onSuccess={(count) => { showMsg(`${count} meses de histórico lançados!`); qc.invalidateQueries({ queryKey: ["/api/portfolio", selectedClient?.id] }); setModalBulkSnap(false); }}
         />
       )}
 
@@ -946,6 +962,114 @@ function EditSnapshotModal({ snapshot, onClose, onSuccess }: { snapshot: Snapsho
         {err && <p className="text-xs text-red-400">{err}</p>}
         <button type="submit" disabled={loading} className="btn-gold w-full py-2.5 rounded-lg text-sm font-semibold mt-2 disabled:opacity-60">
           {loading ? "Salvando..." : "Salvar Alterações"}
+        </button>
+      </form>
+    </ModalShell>
+  );
+}
+
+// ══════════════════════════════════════════════
+// BULK SNAPSHOT (lançamento em lote de dados reais — ano completo)
+// ══════════════════════════════════════════════
+function BulkSnapshotModal({ portfolioId, onClose, onSuccess }: { portfolioId: number; onClose: () => void; onSuccess: (count: number) => void }) {
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [rows, setRows] = useState(
+    MONTH_LABELS.map(() => ({ value: "", withdrawal: "", cdi: "", ibov: "", dolar: "" }))
+  );
+  const [err, setErr] = useState(""); const [loading, setLoading] = useState(false);
+
+  function updateRow(i: number, field: "value" | "withdrawal" | "cdi" | "ibov" | "dolar", v: string) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: v } : r));
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setErr("");
+    const filled = rows
+      .map((r, i) => ({ ...r, monthIdx: i }))
+      .filter(r => r.value.trim() !== "");
+    if (filled.length === 0) { setErr("Preencha ao menos um mês com patrimônio."); return; }
+    if (!/^\d{4}$/.test(year)) { setErr("Ano inválido."); return; }
+    setLoading(true);
+    const body = {
+      rows: filled.map(r => ({
+        month: `${year}-${String(r.monthIdx + 1).padStart(2, "0")}`,
+        value: parseFloat(r.value),
+        withdrawal: r.withdrawal ? parseFloat(r.withdrawal) : 0,
+        cdi: r.cdi !== "" ? parseFloat(r.cdi) : undefined,
+        ibov: r.ibov !== "" ? parseFloat(r.ibov) : undefined,
+        dolar: r.dolar !== "" ? parseFloat(r.dolar) : undefined,
+      })),
+    };
+    const res = await fetch(`/api/portfolio/${portfolioId}/snapshots/bulk`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const d = await res.json(); setLoading(false);
+    if (!res.ok) { setErr(d.error || "Erro ao salvar."); return; }
+    onSuccess(d.count ?? filled.length);
+  }
+
+  return (
+    <ModalShell title="Lançar Ano Completo (Histórico Real)" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+          <p className="text-[11px] text-red-300">
+            Preencha os meses que quiser lançar de uma vez — os que ficarem em branco (sem Patrimônio) não serão salvos. Isto é sempre dado real (Snapshot); se já existir um lançamento para o mesmo mês, ele será atualizado. Deixe CDI/IBOVESPA/Dólar em branco para preenchimento automático via Banco Central.
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 max-w-[140px]">
+          <label className="text-xs font-medium text-muted-foreground">Ano</label>
+          <input type="number" value={year} onChange={e => setYear(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg text-sm bg-input border border-border text-foreground focus:outline-none focus:border-red-500/50 transition-all" />
+        </div>
+        <div className="overflow-x-auto border border-border rounded-lg">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border bg-accent/20">
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Mês</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Patrimônio (R$)</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Saque (R$)</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">CDI %</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">IBOVESPA %</th>
+                <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Dólar %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MONTH_LABELS.map((label, i) => (
+                <tr key={label} className="border-b border-border/40 last:border-0">
+                  <td className="py-1.5 px-2 font-semibold text-white whitespace-nowrap">{label}/{year.slice(-2)}</td>
+                  <td className="py-1.5 px-1">
+                    <input type="number" value={rows[i].value} onChange={e => updateRow(i, "value", e.target.value)}
+                      placeholder="0"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-red-500/50" />
+                  </td>
+                  <td className="py-1.5 px-1">
+                    <input type="number" value={rows[i].withdrawal} onChange={e => updateRow(i, "withdrawal", e.target.value)}
+                      placeholder="0"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-red-500/50" />
+                  </td>
+                  <td className="py-1.5 px-1">
+                    <input type="number" value={rows[i].cdi} onChange={e => updateRow(i, "cdi", e.target.value)}
+                      placeholder="auto"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-red-500/50" />
+                  </td>
+                  <td className="py-1.5 px-1">
+                    <input type="number" value={rows[i].ibov} onChange={e => updateRow(i, "ibov", e.target.value)}
+                      placeholder="auto"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-red-500/50" />
+                  </td>
+                  <td className="py-1.5 px-1">
+                    <input type="number" value={rows[i].dolar} onChange={e => updateRow(i, "dolar", e.target.value)}
+                      placeholder="auto"
+                      className="w-full px-2 py-1.5 rounded bg-input border border-border text-foreground text-xs focus:outline-none focus:border-red-500/50" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {err && <p className="text-xs text-red-400">{err}</p>}
+        <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg text-sm font-semibold mt-1 disabled:opacity-60 bg-red-500/90 hover:bg-red-500 text-white transition-colors">
+          {loading ? "Salvando..." : "Salvar Ano Completo"}
         </button>
       </form>
     </ModalShell>

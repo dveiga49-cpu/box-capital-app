@@ -386,6 +386,54 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.json(snap);
   });
 
+  // Lançamento em lote de Snapshots (dados reais) — permite ao admin lançar
+  // um ano inteiro de histórico real (até 12 meses) numa única chamada, com
+  // Patrimônio/Saque/CDI/IBOVESPA/Dólar por mês; campos de benchmark em
+  // branco são preenchidos automaticamente via Banco Central/Yahoo Finance,
+  // igual ao lançamento individual.
+  app.post("/api/portfolio/:portfolioId/snapshots/bulk", requireAdmin, async (req, res) => {
+    const portfolioId = parseInt(String(req.params.portfolioId));
+    const rows = req.body?.rows;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "Envie um array 'rows' com pelo menos um mês." });
+    }
+    const results = [];
+    for (const row of rows) {
+      const { month, value, withdrawal } = row ?? {};
+      if (!month || value === undefined || value === null || value === "") continue;
+      let { cdi, ibov, dolar } = row ?? {};
+      cdi = cdi !== undefined && cdi !== null && cdi !== "" ? parseFloat(cdi) : undefined;
+      ibov = ibov !== undefined && ibov !== null && ibov !== "" ? parseFloat(ibov) : undefined;
+      dolar = dolar !== undefined && dolar !== null && dolar !== "" ? parseFloat(dolar) : undefined;
+      if (cdi === undefined) {
+        const yearStr = String(month).split("-")[0];
+        const year = parseInt(yearStr);
+        if (!isNaN(year) && year >= 2000 && year <= new Date().getFullYear()) {
+          try {
+            const benchmarks = await fetchBenchmarks(year);
+            cdi   = cdi   ?? benchmarks.cdi;
+            ibov  = ibov  ?? benchmarks.ibov;
+            dolar = dolar ?? benchmarks.dolar;
+          } catch (e) {
+            console.error("Auto-benchmark fetch failed:", e);
+          }
+        }
+      }
+      const data = {
+        portfolioId,
+        month,
+        value: parseFloat(value),
+        withdrawal: withdrawal ? parseFloat(withdrawal) : 0,
+        cdi: cdi ?? null,
+        ibov: ibov ?? null,
+        dolar: dolar ?? null,
+      };
+      const snap = await storage.upsertSnapshot(data as any);
+      results.push(snap);
+    }
+    res.json({ ok: true, count: results.length, snapshots: results });
+  });
+
   app.patch("/api/snapshots/:id", requireAdmin, async (req, res) => {
     const { month, value, cdi, ibov, dolar, withdrawal } = req.body;
     const snap = await storage.updateSnapshot(parseInt(req.params.id), { month, value, cdi, ibov, dolar, withdrawal: withdrawal ?? 0 } as any);
