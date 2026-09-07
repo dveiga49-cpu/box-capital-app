@@ -94,6 +94,20 @@ function buildAnnualData(snapshots: Snapshot[], initialValue: number) {
   });
 }
 
+// Fallback for clients with fewer than 2 closed years of history: plot every
+// real snapshot chronologically (month-by-month) instead of showing a blank
+// placeholder. Reuses the "year" key as the chart's category label so it can
+// share the same AreaChart/tooltip rendering as the annual view.
+function buildMonthlySeries(snapshots: Snapshot[]) {
+  if (!snapshots.length) return [];
+  const sorted = [...snapshots].sort((a, b) => a.month.localeCompare(b.month));
+  return sorted.map(s => ({
+    year: labelMonth(s.month),
+    patrimonio: s.value,
+    withdrawal: s.withdrawal && s.withdrawal > 0 ? s.withdrawal : null,
+  }));
+}
+
 // Custom tooltip for the comparison chart
 function BenchmarkTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -288,6 +302,11 @@ export default function ClientDashboard({ user }: Props) {
 
   // annualData: excludes current year — no closed result yet
   const annualData = useMemo(() => buildAnnualData(snapshots, initialValue), [snapshots, initialValue]);
+
+  // Fallback for newer clients without 2+ closed years yet: chart real monthly history instead
+  const monthlySeries = useMemo(() => buildMonthlySeries(snapshots), [snapshots]);
+  const useMonthlyFallback = annualData.length <= 1 && monthlySeries.length > 1;
+  const patrimonyChartData = useMonthlyFallback ? monthlySeries : annualData;
 
   // Last year benchmark comparison
   const lastAnnual = annualData[annualData.length - 1];
@@ -516,19 +535,20 @@ export default function ClientDashboard({ user }: Props) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                     Evolução Patrimonial
                   </h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Somatório anual do seu patrimônio
-                    {annualData.some(d => d.withdrawal) && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {useMonthlyFallback ? "Evolução mês a mês (ano atual)" : "Somatório anual do seu patrimônio"}
+                    {patrimonyChartData.some((d: any) => d.withdrawal) && (
                       <span className="ml-2 text-red-400">· ● saque</span>
                     )}
                   </p>
                 </div>
                 <span className="text-[10px] bg-yellow-500/10 text-gold px-2.5 py-1 rounded-full font-semibold">
-                  {annualData.length} anos
+                  {useMonthlyFallback ? `${monthlySeries.length} meses` : `${annualData.length} anos`}
                 </span>
               </div>
-              {annualData.length > 1 ? (
+              {(annualData.length > 1 || useMonthlyFallback) ? (
                 <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={annualData} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
+                  <AreaChart data={patrimonyChartData} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#C9A84C" stopOpacity={0.25} />
