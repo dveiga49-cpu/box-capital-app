@@ -601,9 +601,6 @@ export default function ClientDashboard({ user }: Props) {
                       Projeção 2026
                       <span className="text-[9px] font-bold uppercase tracking-wider text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded-full px-2 py-0.5">Expectativa</span>
                     </h3>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {hasManualProjection ? "Expectativa informada pelo assessor — não são dados reais" : "Projeção baseada em crescimento composto"}
-                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dez/26 projetado</p>
@@ -612,9 +609,6 @@ export default function ClientDashboard({ user }: Props) {
                     </p>
                   </div>
                 </div>
-                <p className="text-[10px] text-blue-300/70 mb-3">
-                  Esta projeção é uma estimativa futura e não reflete rentabilidade já realizada.
-                </p>
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={projectionData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                     <defs>
